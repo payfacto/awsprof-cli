@@ -73,6 +73,17 @@ normal (non-activation) output to stdout as usual. The CLI exits non-zero on
 error. Prefer explicit subcommands (`list`, `whoami`, `<profile>`) in scripts;
 the bare interactive picker is for terminal use only.
 
+## Environment coloring
+
+`list`, the interactive picker, and `whoami` color the environment segment of a
+profile name (detected as a case-insensitive whole hyphen-segment, first match
+wins): prod/production = bold red, staging/stage/stg = orange, uat = purple,
+qa = yellow, dev/development = green, sandbox/test/sbx = blue; unrecognized
+names are left plain. Color is emitted only to an interactive terminal - it is
+suppressed when `NO_COLOR` is set, when stdout/stderr is piped or redirected,
+and always for `list --plain`. So piped/redirected output is byte-clean and
+needs no ANSI stripping.
+
 ## Notes for AI agents
 
 - This project was seeded from an unrelated Bitbucket CLI (`bb`) as a template.

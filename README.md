@@ -110,6 +110,28 @@ then each prefix in the `prefixes` list from `~/.awsprof.yaml` (default:
 `payfacto-`), so `awsprof dev` can match a profile literally named `dev`, or
 (if no exact match exists) `payfacto-dev`.
 
+### Environment coloring
+
+`list`, the interactive picker, and `whoami` color the environment segment of a
+profile name so you can tell prod from dev at a glance. The environment is
+detected from a hyphen-delimited segment of the name (case-insensitive,
+whole-segment match, first match wins):
+
+| Environment | Color | Recognized segments |
+| --- | --- | --- |
+| prod | bold red | `prod`, `production` |
+| staging | orange | `staging`, `stage`, `stg` |
+| uat | purple | `uat` |
+| qa | yellow | `qa` |
+| dev | green | `dev`, `development` |
+| sandbox | blue | `sandbox`, `test`, `sbx` |
+
+Only the matched segment is colored; names with no recognized environment (e.g.
+`payfacto-synapse`) are left plain. Color is emitted only when the output is an
+interactive terminal - it is disabled when `NO_COLOR` is set, when output is
+piped or redirected, and always for `awsprof list --plain` (which stays
+byte-clean for scripting).
+
 ## Development
 
 ```bash

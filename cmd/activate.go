@@ -8,7 +8,9 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssooidc"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/payfacto/awsprof-cli/internal/config"
+	"github.com/payfacto/awsprof-cli/internal/envcolor"
 	"github.com/payfacto/awsprof-cli/internal/identity"
 	"github.com/payfacto/awsprof-cli/internal/profiles"
 	"github.com/payfacto/awsprof-cli/internal/shell"
@@ -53,9 +55,10 @@ func resolveTargetForTest(name string) error {
 }
 
 func printProfiles(ps []profiles.Profile) {
+	r := lipgloss.NewRenderer(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Available profiles:")
 	for _, p := range ps {
-		fmt.Fprintf(os.Stderr, "  %s\n", p.Name)
+		fmt.Fprintf(os.Stderr, "  %s\n", envcolor.Render(p.Name, r))
 	}
 }
 

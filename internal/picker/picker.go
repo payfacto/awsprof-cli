@@ -5,7 +5,9 @@ import (
 	"os"
 
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
+	"github.com/payfacto/awsprof-cli/internal/envcolor"
 	"github.com/payfacto/awsprof-cli/internal/profiles"
 )
 
@@ -63,9 +65,12 @@ func selectHeight(termHeight, itemCount int) int {
 // Pick shows a filterable single-select and returns the chosen profile name.
 // The UI renders to stderr so stdout stays reserved for the export line.
 func Pick(items []Item) (string, error) {
+	// Bind the color renderer to stderr (where the picker renders) so color is
+	// enabled/disabled by that stream's TTY + NO_COLOR state.
+	r := lipgloss.NewRenderer(os.Stderr)
 	opts := make([]huh.Option[string], len(items))
 	for i, it := range items {
-		opts[i] = huh.NewOption(it.Label, it.Value)
+		opts[i] = huh.NewOption(envcolor.Render(it.Label, r), it.Value)
 	}
 	// A failure here means the size is unknown (non-TTY); selectHeight handles
 	// the resulting zero height with its fallback.

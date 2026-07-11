@@ -76,9 +76,16 @@ parsing, calling into `internal/`, printing output.
   `NeedsLogin(err)` to classify a credential-resolution failure (stale SSO
   token) vs. an authorization/service error (never retriggers login).
 - **`internal/picker`** - the `huh`-based filterable single-select picker;
-  renders to stderr so stdout stays reserved for the export line.
+  renders to stderr so stdout stays reserved for the export line. Option labels
+  are colored per environment via `internal/envcolor` (stderr-bound renderer).
 - **`internal/shell`** - per-shell (`bash`/`zsh`/`fish`/`powershell`) export
   statement rendering and the `shell-init` hook text.
+- **`internal/envcolor`** - detects the environment segment in a profile name
+  (`Detect`) and colors only that segment via `lipgloss` ("Style D": prod=bold
+  red, staging=orange, uat=purple, qa=yellow, dev=green, sandbox=blue;
+  hardcoded alias map). `Render` takes a `*lipgloss.Renderer` bound to the
+  target stream so `NO_COLOR` / non-TTY / `list --plain` all stay uncolored.
+  Used by `list`, `whoami`, the picker, and the unknown-profile fallback list.
 - Tests live alongside every package (`*_test.go`), using stdlib `testing`.
 
 Do NOT re-introduce `bb`'s Bitbucket client, TUI, or `~/.bbcloud.yaml` config.

@@ -29,6 +29,13 @@ Direct dependencies (`go.mod` `require` block):
   that do not report their size (e.g. Git Bash / mintty) never send one, so the
   list overflowed and scrolled. A direct dependency (previously transitive via
   huh/bubbletea).
+- Terminal styling: `github.com/charmbracelet/lipgloss` v1.1.0 - colors the
+  environment segment of a profile name in `internal/envcolor` ("Style D"), used
+  by `list`, `whoami`, the picker, and the unknown-profile fallback list. A
+  `*lipgloss.Renderer` is bound to the target stream (stdout or stderr) so
+  lipgloss's own color-profile detection handles `NO_COLOR`, non-TTY, and
+  color-depth degradation; `list --plain` bypasses coloring entirely. A direct
+  dependency (previously transitive via huh/bubbletea).
 - AWS SDK: `github.com/aws/aws-sdk-go-v2` v1.42.1, with
   `github.com/aws/aws-sdk-go-v2/config` v1.32.29 (shared-config/credential
   loading in `internal/identity`), `github.com/aws/aws-sdk-go-v2/service/ssooidc`
