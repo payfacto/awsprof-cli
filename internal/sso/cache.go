@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-const expirySkew = 60 * time.Second
-
 // Token is a cached SSO access token plus the fields the aws CLI stores.
 type Token struct {
 	AccessToken  string
@@ -38,6 +36,12 @@ type cacheJSON struct {
 const expiresLayout = "2006-01-02T15:04:05Z"
 
 // CacheKey returns the lowercase SHA1 hex of the given session name or URL.
+//
+// SHA1 here is intentional and correct: it is NOT used as a security primitive.
+// It reproduces the aws CLI v2 cache *filename* derivation
+// (~/.aws/sso/cache/<sha1>.json) so awsprof and the aws CLI interoperate on the
+// same cached token. A SAST tool that flags crypto/sha1 as "weak hashing" is a
+// false positive in this use.
 func CacheKey(sessionOrStartURL string) string {
 	sum := sha1.Sum([]byte(sessionOrStartURL))
 	return hex.EncodeToString(sum[:])
@@ -57,38 +61,13 @@ func CacheFilePath(session, startURL string) (string, error) {
 	return filepath.Join(home, ".aws", "sso", "cache", CacheKey(key)+".json"), nil
 }
 
-// ReadToken loads a cached token from path.
-//
-// Note: awsprof's activation path delegates SSO token cache validation to the
-// AWS SDK (which reads the same cache file); this helper is provided for
-// callers/tests and future use.
-func ReadToken(path string) (Token, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return Token{}, err
-	}
-	var j cacheJSON
-	if err := json.Unmarshal(data, &j); err != nil {
-		return Token{}, err
-	}
-	exp, err := time.Parse(expiresLayout, j.ExpiresAt)
-	if err != nil {
-		return Token{}, err
-	}
-	return Token{
-		AccessToken:  j.AccessToken,
-		ExpiresAt:    exp,
-		StartURL:     j.StartURL,
-		Region:       j.Region,
-		ClientID:     j.ClientID,
-		ClientSecret: j.ClientSecret,
-		RefreshToken: j.RefreshToken,
-	}, nil
-}
-
-// WriteToken writes tok to path in aws-CLI-compatible JSON, creating parents.
+// WriteToken writes tok to path in aws-CLI-compatible JSON, creating parent
+// directories. The write is atomic: it writes a sibling temp file (mode 0600)
+// and renames it over path, so a crash mid-write cannot leave a half-written,
+// corrupt cache that both awsprof and the aws CLI would then fail to parse.
 func WriteToken(path string, tok Token) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	j := cacheJSON{
@@ -104,17 +83,26 @@ func WriteToken(path string, tok Token) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
-}
 
-// Valid reports whether the token is present and not within the expiry skew.
-//
-// Note: awsprof's activation path delegates SSO token cache validation to the
-// AWS SDK (which reads the same cache file); this helper is provided for
-// callers/tests and future use.
-func (t Token) Valid(now time.Time) bool {
-	if t.AccessToken == "" {
-		return false
+	tmp, err := os.CreateTemp(dir, ".sso-token-*.json")
+	if err != nil {
+		return err
 	}
-	return t.ExpiresAt.After(now.Add(expirySkew))
+	tmpName := tmp.Name()
+	// Best-effort cleanup: a no-op once the rename below has consumed tmpName,
+	// and removes the temp file on any early-return error path.
+	defer func() { _ = os.Remove(tmpName) }()
+
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }

@@ -32,16 +32,41 @@ func Parse(s string) (Shell, error) {
 	}
 }
 
-// ExportLine returns the statement that sets AWS_PROFILE for this shell.
+// ExportLine returns the statement that sets AWS_PROFILE for this shell. The
+// installed hook eval's / Invoke-Expression's this line, so the profile name is
+// quoted per shell to prevent a crafted name (e.g. from a malicious
+// ~/.aws/config section) from breaking out and executing code.
 func (sh Shell) ExportLine(profile string) string {
 	switch sh {
 	case Fish:
-		return fmt.Sprintf("set -gx AWS_PROFILE '%s'", profile)
+		return "set -gx AWS_PROFILE " + fishSingleQuote(profile)
 	case PowerShell:
-		return fmt.Sprintf("$env:AWS_PROFILE = %q", profile)
+		return "$env:AWS_PROFILE = " + powershellSingleQuote(profile)
 	default:
-		return fmt.Sprintf("export AWS_PROFILE='%s'", profile)
+		return "export AWS_PROFILE=" + posixSingleQuote(profile)
 	}
+}
+
+// posixSingleQuote single-quotes s for bash/zsh, rendering an embedded single
+// quote as the '\” idiom so the value cannot escape the quotes.
+func posixSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// fishSingleQuote single-quotes s for fish, where inside single quotes only
+// backslash and single quote are special (escaped with a backslash). Backslash
+// is escaped first so the backslash added for a quote is not re-escaped.
+func fishSingleQuote(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, "'", `\'`)
+	return "'" + s + "'"
+}
+
+// powershellSingleQuote single-quotes s for PowerShell, doubling an embedded
+// single quote. A single-quoted PowerShell string is literal - no $ or $(...)
+// interpolation - so the value cannot inject when Invoke-Expression'd.
+func powershellSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 // Hook returns the shell wrapper printed by `awsprof shell-init <shell>`.

@@ -22,6 +22,9 @@ func TestNeedsLogin(t *testing.T) {
 		nil,
 		errors.New("AccessDenied: not authorized to perform sts:GetCallerIdentity"),
 		errors.New("no EC2 IMDS role found"),
+		// Contains "token" but none of the login signals - must stay false, so a
+		// future loosening of the signal list to a bare "token" would fail here.
+		errors.New("AccessDenied: the provided token is malformed"),
 	}
 	for _, e := range no {
 		if NeedsLogin(e) {

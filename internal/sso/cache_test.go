@@ -1,6 +1,8 @@
 package sso
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -41,34 +43,39 @@ func TestCacheFilePath(t *testing.T) {
 	}
 }
 
-func TestWriteReadRoundTrip(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "tok.json")
+// WriteToken must produce a file matching the aws CLI v2 cache schema, and its
+// atomic write must not leave a temp file behind.
+func TestWriteTokenSchema(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "tok.json")
 	exp := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	in := Token{AccessToken: "abc", ExpiresAt: exp, StartURL: "https://x/start", Region: "us-east-1"}
 	if err := WriteToken(p, in); err != nil {
 		t.Fatal(err)
 	}
-	got, err := ReadToken(p)
+
+	data, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.AccessToken != "abc" || !got.ExpiresAt.Equal(exp) || got.Region != "us-east-1" {
-		t.Fatalf("round-trip mismatch: %+v", got)
+	var j cacheJSON
+	if err := json.Unmarshal(data, &j); err != nil {
+		t.Fatalf("written cache is not valid JSON: %v", err)
 	}
-}
+	if j.AccessToken != "abc" || j.StartURL != "https://x/start" || j.Region != "us-east-1" {
+		t.Fatalf("schema mismatch: %+v", j)
+	}
+	if want := exp.Format(expiresLayout); j.ExpiresAt != want {
+		t.Errorf("expiresAt = %q, want %q", j.ExpiresAt, want)
+	}
 
-func TestTokenValid(t *testing.T) {
-	now := time.Now()
-	if (Token{AccessToken: "abc", ExpiresAt: now.Add(2 * time.Minute)}).Valid(now) != true {
-		t.Errorf("token 2m out should be valid")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if (Token{AccessToken: "abc", ExpiresAt: now.Add(30 * time.Second)}).Valid(now) != false {
-		t.Errorf("token inside 60s skew should be invalid")
-	}
-	if (Token{}).Valid(now) != false {
-		t.Errorf("zero token should be invalid")
-	}
-	if (Token{AccessToken: "", ExpiresAt: now.Add(time.Hour)}).Valid(now) != false {
-		t.Errorf("token with empty access token should be invalid")
+	for _, e := range entries {
+		if e.Name() != "tok.json" {
+			t.Errorf("atomic write left an unexpected file behind: %s", e.Name())
+		}
 	}
 }

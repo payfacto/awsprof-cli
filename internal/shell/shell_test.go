@@ -23,12 +23,37 @@ func TestExportLine(t *testing.T) {
 		Bash:       "export AWS_PROFILE='dev'",
 		Zsh:        "export AWS_PROFILE='dev'",
 		Fish:       "set -gx AWS_PROFILE 'dev'",
-		PowerShell: "$env:AWS_PROFILE = \"dev\"",
+		PowerShell: "$env:AWS_PROFILE = 'dev'",
 	}
 	for sh, want := range cases {
 		if got := sh.ExportLine("dev"); got != want {
 			t.Errorf("ExportLine(%v) = %q, want %q", sh, got, want)
 		}
+	}
+}
+
+// A crafted profile name must not break out of its quotes or interpolate.
+func TestExportLine_Escaping(t *testing.T) {
+	cases := []struct {
+		name    string
+		sh      Shell
+		profile string
+		want    string
+	}{
+		{"posix single quote", Bash, "a'b", `export AWS_PROFILE='a'\''b'`},
+		{"posix injection attempt", Zsh, "x'; rm -rf ~; '", `export AWS_PROFILE='x'\''; rm -rf ~; '\'''`},
+		{"powershell single quote", PowerShell, "a'b", "$env:AWS_PROFILE = 'a''b'"},
+		{"powershell dollar not interpolated", PowerShell, "payfacto$x", "$env:AWS_PROFILE = 'payfacto$x'"},
+		{"powershell subexpr not executed", PowerShell, "$(calc)", "$env:AWS_PROFILE = '$(calc)'"},
+		{"fish single quote", Fish, "a'b", `set -gx AWS_PROFILE 'a\'b'`},
+		{"fish backslash", Fish, `a\b`, `set -gx AWS_PROFILE 'a\\b'`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.sh.ExportLine(c.profile); got != c.want {
+				t.Errorf("ExportLine(%v, %q) = %q, want %q", c.sh, c.profile, got, c.want)
+			}
+		})
 	}
 }
 

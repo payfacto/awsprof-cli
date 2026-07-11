@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -47,10 +48,16 @@ func resolveTarget(name string) (profiles.Profile, error) {
 	return profiles.Profile{}, fmt.Errorf("unknown profile %q", name)
 }
 
-// resolveTargetForTest is a thin seam used by tests to exercise resolution
-// without pulling in the rest of the activation flow (identity check, SSO).
-func resolveTargetForTest(name string) error {
-	_, err := resolveTarget(name)
+// regionHint annotates err with a hint when prof is an SSO profile that has no
+// region - the usual cause of an otherwise cryptic credential/SSO failure
+// (an SSO profile needs `sso_region` on its [sso-session] or `region` on itself).
+func regionHint(prof profiles.Profile, err error) error {
+	if err == nil {
+		return nil
+	}
+	if prof.Type == profiles.TypeSSO && prof.SSO != nil && prof.SSO.Region == "" {
+		return fmt.Errorf("SSO profile %q has no region; set `sso_region` on its [sso-session] or `region` on the profile: %w", prof.Name, err)
+	}
 	return err
 }
 
@@ -81,7 +88,7 @@ func activate(ctx context.Context, name string, sh shell.Shell) error {
 			id, err = identity.Check(ctx, prof.Name)
 		}
 		if err != nil {
-			return err
+			return regionHint(prof, err)
 		}
 	}
 
@@ -95,6 +102,9 @@ func activate(ctx context.Context, name string, sh shell.Shell) error {
 // ssoLogin runs the device-authorization flow for an SSO profile and caches
 // the resulting token where the AWS SDK/CLI expect to find it.
 func ssoLogin(ctx context.Context, sc profiles.SSOConfig) error {
+	if sc.Region == "" {
+		return errors.New("SSO profile has no region; set `sso_region` on its [sso-session] or `region` on the profile")
+	}
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(sc.Region))
 	if err != nil {
 		return err
