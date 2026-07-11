@@ -22,6 +22,13 @@ Direct dependencies (`go.mod` `require` block):
 - Interactive picker: `github.com/charmbracelet/huh` v1.0.0 - filterable
   single-select for the bare-command picker (`internal/picker`), rendered to
   stderr so stdout stays reserved for the export line.
+- Terminal sizing: `github.com/charmbracelet/x/term` v0.2.1 - `GetSize` reads the
+  terminal height so the picker caps its visible-option viewport
+  (`picker.selectHeight`). Without an explicit height huh sizes the list to the
+  full option count and relies on a window-size message to clamp it; terminals
+  that do not report their size (e.g. Git Bash / mintty) never send one, so the
+  list overflowed and scrolled. A direct dependency (previously transitive via
+  huh/bubbletea).
 - AWS SDK: `github.com/aws/aws-sdk-go-v2` v1.42.1, with
   `github.com/aws/aws-sdk-go-v2/config` v1.32.29 (shared-config/credential
   loading in `internal/identity`), `github.com/aws/aws-sdk-go-v2/service/ssooidc`
