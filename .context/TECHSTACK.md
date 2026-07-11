@@ -10,7 +10,8 @@ versions.
 ## Language and Runtime
 
 - Go `1.26.4` (per `go.mod`).
-- Single-binary CLI; entrypoint `main.go` -> `cmd.Execute()`.
+- Single-binary CLI; entrypoint `cmd/awsprof/main.go` -> `cmd.Execute()` (under
+  `cmd/awsprof/` so `go install .../cmd/awsprof` produces an `awsprof` binary).
 - Cross-compiled for `linux`, `darwin`, `windows` x `amd64`, `arm64` with
   `CGO_ENABLED=0` (per `.goreleaser.yaml`).
 

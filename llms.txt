@@ -29,10 +29,10 @@ brew install payfacto/tap/awsprof
 # and place the `awsprof` binary on your PATH.
 
 # Go developers
-go install github.com/payfacto/awsprof-cli@latest
+go install github.com/payfacto/awsprof-cli/cmd/awsprof@latest
 
 # Or build locally
-go build -o awsprof .
+go build -o awsprof ./cmd/awsprof
 ```
 
 ## Profile discovery

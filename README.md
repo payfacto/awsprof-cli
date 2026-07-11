@@ -41,10 +41,10 @@ and place the `awsprof` binary somewhere on your `PATH`.
 ### From source
 
 ```bash
-go install github.com/payfacto/awsprof-cli@latest
+go install github.com/payfacto/awsprof-cli/cmd/awsprof@latest
 
 # Or build locally
-go build -o awsprof .
+go build -o awsprof ./cmd/awsprof
 ```
 
 ## Setup: install the shell hook
@@ -132,9 +132,9 @@ byte-clean for scripting).
 ## Development
 
 ```bash
-go build -o awsprof .     # build (version reports as "dev")
-make build                # build with a git-derived version stamp
-go test ./...             # run all tests
+go build -o awsprof ./cmd/awsprof   # build (version derived from VCS build info)
+make build                          # build with a git-derived version stamp
+go test ./...                       # run all tests
 ```
 
 Standard `go fmt` and `go vet` apply.

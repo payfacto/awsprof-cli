@@ -32,7 +32,7 @@ remaining backlog items.
 ## Commands
 
 ```bash
-go build -o awsprof .      # build the CLI binary (version = "dev")
+go build -o awsprof ./cmd/awsprof   # build the CLI binary (version from VCS build info)
 make build                 # build with a git-derived version stamp
 make test                  # go test ./...
 go test ./...              # run all tests
@@ -56,7 +56,9 @@ When renaming/moving the `Version` variable, update both `Makefile` and
 
 ## Package layout
 
-`main.go` calls `cmd.Execute()`. Cobra command definitions are thin: flag
+`cmd/awsprof/main.go` calls `cmd.Execute()` (the entrypoint lives under
+`cmd/awsprof/` so `go install .../cmd/awsprof` yields a binary named `awsprof`,
+not `awsprof-cli`). Cobra command definitions are thin: flag
 parsing, calling into `internal/`, printing output.
 
 - **`cmd/`** - `root.go` (root command: bare picker or positional `<profile>`,

@@ -4,6 +4,7 @@ package cmd
 import (
 	"errors"
 	"os"
+	"runtime/debug"
 
 	"github.com/payfacto/awsprof-cli/internal/picker"
 	"github.com/payfacto/awsprof-cli/internal/profiles"
@@ -16,6 +17,30 @@ import (
 // -ldflags -X 'github.com/payfacto/awsprof-cli/cmd.Version=...'.
 var Version = "dev"
 
+// effectiveVersion resolves the version to report. An explicit ldflags value
+// (anything other than the "dev" default) always wins. Otherwise - as with a
+// binary from `go install <module>/cmd/awsprof@<version>`, which does not run
+// our ldflags - it falls back to the module version embedded in the build info,
+// so those binaries report the real tag instead of "dev".
+func effectiveVersion(ldflags, buildInfo string) string {
+	if ldflags != "dev" {
+		return ldflags
+	}
+	if buildInfo != "" && buildInfo != "(devel)" {
+		return buildInfo
+	}
+	return ldflags
+}
+
+// mainModuleVersion returns the main module's version from the embedded build
+// info, or "" when it is unavailable.
+func mainModuleVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		return info.Main.Version
+	}
+	return ""
+}
+
 // shellFlag is the target shell for export syntax, set via the persistent
 // --shell flag and resolved through resolveShell().
 var shellFlag string
@@ -24,7 +49,6 @@ var rootCmd = &cobra.Command{
 	Use:           "awsprof [profile]",
 	Short:         "Pick an AWS profile to log in as",
 	Args:          cobra.MaximumNArgs(1),
-	Version:       Version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -57,6 +81,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.Version = effectiveVersion(Version, mainModuleVersion())
 	rootCmd.PersistentFlags().StringVar(&shellFlag, "shell", "bash", "target shell for export syntax (bash|zsh|fish|powershell)")
 }
 

@@ -1,5 +1,5 @@
-# Binary
-awsprof
+# Binary (root-built only; do NOT match the cmd/awsprof/ package dir)
+/awsprof
 
 # Go
 *.exe

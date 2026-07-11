@@ -6,10 +6,10 @@ LDFLAGS := -X 'github.com/payfacto/awsprof-cli/cmd.Version=$(VERSION)'
 .PHONY: build test clean install
 
 build:
-	go build -ldflags "$(LDFLAGS)" -o awsprof .
+	go build -ldflags "$(LDFLAGS)" -o awsprof ./cmd/awsprof
 
 install:
-	go install -ldflags "$(LDFLAGS)" .
+	go install -ldflags "$(LDFLAGS)" ./cmd/awsprof
 
 test:
 	go test ./...
