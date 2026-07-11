@@ -10,7 +10,10 @@ code in this repository.
 `awsprof` is a Go CLI (binary `awsprof` / `awsprof.exe`) for picking an AWS
 profile to log in as, from the list of profiles available on the machine. It
 reads the standard AWS shared config files (`~/.aws/config`,
-`~/.aws/credentials`) and lets the user select/activate one.
+`~/.aws/credentials`), resolves short names via a configured prefix list, logs
+in via SSO device authorization only when the cached token is stale, verifies
+the resulting identity, and sets `AWS_PROFILE` in the current shell through an
+installed shell hook.
 
 The repository was seeded from the `bb` Bitbucket CLI as a convenient Go +
 Cobra + release-pipeline template, but it is a **brand-new project with no ties
@@ -18,13 +21,13 @@ to `bb`**. Ignore any residual Bitbucket concepts.
 
 ## Current state
 
-**Docs and scaffolding only - there is no Go source yet.** Present: the
-`.context/` knowledge base, `README.md`, `llms.txt`, the release pipeline
-(`.goreleaser.yaml`, `.github/workflows/release.yml`, `Makefile`), and editor/
-lint config. The concrete command surface and architecture are being defined in
-a brainstorming/design pass; capture the outcome in `.context/specs/` before
-writing code. See [`.context/HANDOFF.md`](.context/HANDOFF.md) to pick up where
-the last session left off.
+**Code present - the CLI is fully implemented.** Command surface: bare
+interactive picker, `<profile>` positional resolution, `list [--plain]`,
+`whoami`, `shell-init <bash|zsh|fish|powershell>`, and a hidden `use <profile>`
+alias, all wired in `cmd/`. Supporting packages live under `internal/` (see
+"Package layout" below). Tests exist alongside every package. See
+[`.context/HANDOFF.md`](.context/HANDOFF.md) for session history and any
+remaining backlog items.
 
 ## Commands
 
@@ -41,7 +44,7 @@ Standard `go fmt` and `go vet` apply. No linter is configured.
 
 Version is injected via `-ldflags -X 'github.com/payfacto/awsprof-cli/cmd.Version=...'`.
 
-- `cmd/root.go` will define `var Version = "dev"` and wire it into
+- `cmd/root.go` defines `var Version = "dev"` and wires it into
   `rootCmd.Version` (enables `awsprof --version`).
 - `Makefile` derives the version from `git describe --tags --always --dirty`.
 - `.goreleaser.yaml` injects `v{{.Version}}` at release time; the
@@ -51,20 +54,32 @@ Version is injected via `-ldflags -X 'github.com/payfacto/awsprof-cli/cmd.Versio
 When renaming/moving the `Version` variable, update both `Makefile` and
 `.goreleaser.yaml` ldflags targets.
 
-## Intended architecture (to be confirmed in design)
+## Package layout
 
-Expect the standard Cobra layout once code lands:
+`main.go` calls `cmd.Execute()`. Cobra command definitions are thin: flag
+parsing, calling into `internal/`, printing output.
 
-- **`cmd/`** - Cobra command definitions (thin: flag parsing, calling into the
-  profile logic, printing output).
-- **`internal/`** - profile discovery and AWS shared-config parsing (reading
-  `~/.aws/config` / `~/.aws/credentials`, honoring `AWS_CONFIG_FILE` /
-  `AWS_SHARED_CREDENTIALS_FILE`), and the selection/activation logic.
-- Tests alongside the packages they cover, using stdlib `testing`.
-
-An interactive picker (for `awsprof` with no subcommand) is a likely fit given
-the "choose from a list" use case, but the TUI/prompt choice is deferred to the
-design pass - do not assume a dependency until it is decided.
+- **`cmd/`** - `root.go` (root command: bare picker or positional `<profile>`,
+  persistent `--shell` flag), `activate.go` (shared resolve -> login-if-needed
+  -> verify -> print-export flow used by root and `use`), `list.go`,
+  `whoami.go`, `shell_init.go`, `use.go` (hidden alias).
+- **`internal/config`** - loads the optional `~/.awsprof.yaml` (currently just
+  the `prefixes` list used for short-name resolution; default `payfacto-`).
+- **`internal/profiles`** - discovers and classifies profiles from
+  `~/.aws/config` / `~/.aws/credentials` (honoring `AWS_CONFIG_FILE` /
+  `AWS_SHARED_CREDENTIALS_FILE`) via `gopkg.in/ini.v1`; resolves a short name to
+  a profile (exact match, then each configured prefix in order).
+- **`internal/sso`** - the SSO device-authorization login flow
+  (`ssooidc` RegisterClient / StartDeviceAuthorization / CreateToken polling)
+  and an aws-CLI-compatible token cache at `~/.aws/sso/cache/<sha1>.json`.
+- **`internal/identity`** - `sts.GetCallerIdentity` check for a profile, plus
+  `NeedsLogin(err)` to classify a credential-resolution failure (stale SSO
+  token) vs. an authorization/service error (never retriggers login).
+- **`internal/picker`** - the `huh`-based filterable single-select picker;
+  renders to stderr so stdout stays reserved for the export line.
+- **`internal/shell`** - per-shell (`bash`/`zsh`/`fish`/`powershell`) export
+  statement rendering and the `shell-init` hook text.
+- Tests live alongside every package (`*_test.go`), using stdlib `testing`.
 
 Do NOT re-introduce `bb`'s Bitbucket client, TUI, or `~/.bbcloud.yaml` config.
 

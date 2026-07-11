@@ -2,11 +2,20 @@
 
 `awsprof` is a command-line tool (binary `awsprof` / `awsprof.exe`) for picking
 an AWS profile to log in as, from the list of profiles available on the machine.
-It reads the standard AWS shared config files and lets you select/activate one.
+It reads the standard AWS shared config files, resolves and (if needed) logs in
+via SSO device authorization, and sets `AWS_PROFILE` in the current shell.
 
-> Status: early / in design. Scaffolding, docs, and release pipeline exist; the
-> concrete command surface is being defined. The commands below describe the
-> intended shape and will change as the design settles.
+## Required setup: shell hook
+
+Activation only works if a shell hook has been installed (once) so that the
+export line `awsprof` prints on success gets `eval`'d into the current shell.
+Without the hook, invoking the raw binary cannot change your shell's
+environment - it only prints the line.
+
+- bash: add to `~/.bashrc`: `eval "$(awsprof shell-init bash)"`
+- zsh: add to `~/.zshrc`: `eval "$(awsprof shell-init zsh)"`
+- fish: add to `~/.config/fish/config.fish`: `awsprof shell-init fish | source`
+- PowerShell: add to `$PROFILE`: `awsprof shell-init powershell | Out-String | Invoke-Expression`
 
 ## Installation
 
@@ -37,28 +46,41 @@ Profiles come from the standard AWS locations:
 `awsprof` reads these files. It does not write long-lived credentials into a
 config of its own.
 
-## Commands (intended shape, in design)
+## Commands
 
 ```
-awsprof                 # interactive: pick a profile from the list
-awsprof list            # print the available profiles
-awsprof use PROFILE     # select/activate a specific profile
-awsprof --version       # print version
-awsprof --help          # help
+awsprof                                         # interactive picker -> login if needed -> activate
+awsprof <profile>                               # resolve (exact, then configured prefix) -> login if needed -> activate
+awsprof list [--plain]                          # list profiles; marks the active one; --plain = bare names
+awsprof whoami                                  # print current identity (AWS_PROFILE, Account, ARN); no switch
+awsprof shell-init <bash|zsh|fish|powershell>   # emit the shell hook (see Required setup above)
+awsprof use <profile>                           # hidden alias of `awsprof <profile>`
+awsprof --version                               # print version
+awsprof --help                                  # help
 ```
 
-The details still to be decided: how a profile is "activated" (export
-`AWS_PROFILE`, run `aws sso login --profile`, print credentials), the output
-formats, and whether the bare command opens an interactive picker or prints
-help. Prefer explicit subcommands in scripts once they exist; do not rely on
-the bare interactive form in automation.
+Persistent flag: `--shell` (default `bash`) selects export syntax; the
+installed shell hook passes this automatically.
+
+## stdout/stderr contract
+
+On a successful activation, `awsprof` writes exactly one line to stdout: the
+shell-appropriate `export AWS_PROFILE=...` statement (or `set -gx` for fish,
+`$env:AWS_PROFILE = ...` for PowerShell). Everything else - the interactive
+picker, SSO login progress/URLs, the resolved account/ARN confirmation, and
+all errors - goes to stderr. `awsprof list` and `awsprof whoami` write their
+normal (non-activation) output to stdout as usual. The CLI exits non-zero on
+error. Prefer explicit subcommands (`list`, `whoami`, `<profile>`) in scripts;
+the bare interactive picker is for terminal use only.
 
 ## Notes for AI agents
 
 - This project was seeded from an unrelated Bitbucket CLI (`bb`) as a template.
   It has no Bitbucket functionality; ignore any residual references.
-- There is no Go source yet - the command surface is being designed. Check
-  `.context/HANDOFF.md` and `.context/specs/` for the current plan before
-  assuming a command exists.
-- Once implemented, the CLI is expected to exit non-zero on error and write
-  errors to stderr, keeping stdout clean for machine-readable output.
+- No `aws` CLI dependency: SSO login and identity checks go through
+  `aws-sdk-go-v2` directly. The SSO token cache written to
+  `~/.aws/sso/cache/*.json` is aws-CLI-compatible, so a subsequent `aws sts
+  get-caller-identity` reuses the same cached token.
+- Activation requires the shell hook (see "Required setup" above) to be
+  installed in the invoking shell; running the bare binary without the hook
+  only prints the export line and cannot change the caller's environment.
