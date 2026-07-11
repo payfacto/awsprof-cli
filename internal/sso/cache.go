@@ -67,7 +67,10 @@ func ReadToken(path string) (Token, error) {
 	if err := json.Unmarshal(data, &j); err != nil {
 		return Token{}, err
 	}
-	exp, _ := time.Parse(expiresLayout, j.ExpiresAt)
+	exp, err := time.Parse(expiresLayout, j.ExpiresAt)
+	if err != nil {
+		return Token{}, err
+	}
 	return Token{
 		AccessToken:  j.AccessToken,
 		ExpiresAt:    exp,
@@ -102,7 +105,7 @@ func WriteToken(path string, tok Token) error {
 
 // Valid reports whether the token is present and not within the expiry skew.
 func (t Token) Valid(now time.Time) bool {
-	if t.AccessToken == "" && t.ExpiresAt.IsZero() {
+	if t.AccessToken == "" {
 		return false
 	}
 	return t.ExpiresAt.After(now.Add(expirySkew))
