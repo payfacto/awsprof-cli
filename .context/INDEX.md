@@ -24,6 +24,12 @@ are also auto-imported by `CLAUDE.md`.
   The awsprof design: shell-hook activation, native AWS SDK (SSO device-login
   flow, no `aws` CLI), `awsprof <profile>` primary + picker + list/whoami,
   exact-then-prefix name resolution, cross-shell hooks. Approved 2026-07-10.
+- [specs/2026-07-11-env-color-design.md](specs/2026-07-11-env-color-design.md) -
+  Environment coloring: detect the env segment in a profile name
+  (`payfacto-<app>-<env>-<role>`) and color just that segment ("Style D") in
+  `list`, the picker, and `whoami`. Hardcoded env->color map (prod=bold red,
+  staging=orange, uat=purple, qa=yellow, dev=green, sandbox=blue) via lipgloss;
+  respects NO_COLOR / non-TTY / `--plain`. Approved 2026-07-11.
 
 ### `plans/`
 
