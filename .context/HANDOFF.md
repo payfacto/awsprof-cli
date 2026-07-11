@@ -290,3 +290,116 @@ builds. Delivered TDD (envcolor package test-first) with live verification.
   cutting v0.1.0.
 - `clean-code:go` for further Go work; `sideshow` to show the user any
   color/visual options.
+
+---
+
+## Session - 2026-07-11 14:16 (Shipped v0.1.0 + v0.1.1: release pipeline, go-install fix, review + clean-code, CI/README)
+
+Long session. Cut the first two releases and hardened the code. All work is on
+`main`, pushed to Bitbucket, mirrored to GitHub. Commits since the previous
+block: `41bac9d`..`226aae9` (see `git log 946ea15..HEAD`).
+
+### Release pipeline is LIVE (Payfacto-standard, proven end-to-end)
+
+- **Bitbucket is source of truth**, GitHub hosts CI + releases:
+  - `origin` = `https://jmadore@bitbucket.org/payfactopay/awsprof-cli.git`
+  - `github` = `https://github.com/payfacto/awsprof-cli.git` (repo is now PUBLIC)
+  - Local `gh` is authed as **jmadore-payfacto** with ADMIN on the payfacto repos.
+- **Flow:** work on `main` -> `git push origin main` (Bitbucket) -> the
+  [bitbucket-pipelines.yml](bitbucket-pipelines.yml) mirror force-pushes main+tags
+  to GitHub -> `.github/workflows/release.yml` runs GoReleaser on any `v*` tag.
+- **To cut a release:** `git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`.
+  That is the ONLY release action needed. Newest tag = **v0.1.1**.
+- **One-time manual setup is DONE (won't repeat):** Bitbucket Pipelines enabled +
+  SSH keypair + `github.com` known host; a write-enabled GitHub deploy key
+  (`bitbucket-mirror`); and the `HOMEBREW_TAP_TOKEN` Actions secret (a PAT with
+  Contents:write on both `payfacto/awsprof-cli` and `payfacto/homebrew-tap` -
+  GoReleaser uses it as GITHUB_TOKEN for the release AND the tap bump). Do not
+  record the token value.
+- **Homebrew:** `payfacto/homebrew-tap` (public), `Formula/awsprof.rb` bumped by
+  GoReleaser each release. `brew install payfacto/tap/awsprof`.
+- `.goreleaser.yaml` pins `release.github.owner/name` to payfacto/awsprof-cli so
+  the release + formula URLs are correct regardless of which remote GoReleaser
+  infers locally (origin is Bitbucket, which produced wrong URLs in snapshots).
+
+### go install fix (`98710fa`) - the entrypoint moved
+
+- `main.go` relocated to **`cmd/awsprof/main.go`** so
+  `go install github.com/payfacto/awsprof-cli/cmd/awsprof@latest` yields a binary
+  named **`awsprof`** (Go names it after the package dir; the module basename was
+  giving `awsprof-cli`). Build paths updated: `.goreleaser` gets
+  `main: ./cmd/awsprof` and `binary: awsprof`; Makefile builds `./cmd/awsprof`;
+  plus README/llms/CLAUDE/TECHSTACK.
+- **Version fallback** in `cmd/root.go`: `effectiveVersion` + `mainModuleVersion`
+  read `runtime/debug` build info when ldflags aren't applied, so `go install` /
+  `go build` report the real module version instead of `dev` (release binaries
+  still use the ldflags value). Unit-tested (`cmd/version_test.go`).
+- **`.gitignore` gotcha (fixed in same commit):** a bare `awsprof` line was
+  ignoring the whole `cmd/awsprof/` dir; anchored to `/awsprof` (root binary only).
+- Verified: `go install .../cmd/awsprof@v0.1.1` -> `awsprof` reporting `v0.1.1`.
+
+### Full-repo review + hardening (`f4db1c9`, via code-review-expert)
+
+- **Security (was P2):** `internal/shell` `ExportLine` now quotes the profile
+  name per shell (POSIX `'\''`, PowerShell single-quote doubling, fish backslash)
+  so a crafted `~/.aws/config` profile name cannot break out and execute when the
+  hook eval's the line. Also fixes the PowerShell `$`/`$(...)` interpolation bug
+  (was `%q`). Covered by injection test cases.
+- `internal/sso/cache.go`: expanded the SHA1 comment (interop filename derivation,
+  not crypto - explicit SAST false-positive note per user request); removed
+  production-dead `ReadToken` / `Token.Valid` / `expirySkew`; **`WriteToken` is
+  now atomic** (temp file + `os.Rename`).
+- `cmd/activate.go`: removed the `resolveTargetForTest` seam (tests call
+  `resolveTarget` directly); added a friendly "SSO profile has no region" message
+  via a tested `regionHint` helper + an `ssoLogin` guard.
+
+### clean-code:go pass (`da5f492`)
+
+- `renderList` split into `renderPlainList` + `renderList` (drops the bool flag
+  arg F3 + 4th param F1); `profiles.classify` returns `(Type, *SSOConfig)` instead
+  of mutating a `*Profile` (F2/F1, now a pure query); `login.go` named the magic
+  5s poll durations (G25). 79 tests pass incl. `-race` (CGO/gcc present here).
+- **Left as conscious trade-offs (documented in code):** `sso.Login` 5 params
+  (ctx exempt + 3 DI seams; struct-bundling is net-neutral), and
+  `identity.NeedsLogin` error-string matching (the AWS SDK exposes no clean typed
+  signal at that boundary; locked by regression + guard tests).
+
+### CI + README polish (`31a693d`, `226aae9`)
+
+- Bumped `actions/checkout@v4->@v7` and `actions/setup-go@v5->@v6` (Node 24;
+  clears the Node 20 deprecation warning seen on the v0.1.1 run). Takes effect on
+  the next tagged release.
+- Added `assets/banner.png` (top of README) and `assets/example.png` (after the
+  "What it does" section, shows the color-coded picker + whoami). `assets/` now
+  tracked. The two `<p align="center">` blocks trip MD033 (inline HTML) - expected
+  and fine for centering images.
+
+### Running state
+
+- On `main` @ `226aae9`, clean except an **untracked `assets/icon.png`** the user
+  added (left uncommitted intentionally - not part of any task).
+- No background processes. `goreleaser` v2.17.0 installed at `$(go env GOPATH)/bin`.
+- **User's shell env:** `~/go/bin` is on PATH; `~/.bashrc` line 19 runs the hook
+  `eval "$(awsprof shell-init bash)"`. `~/go/bin/awsprof.exe` = the v0.1.0 release
+  binary placed manually (works); `~/go/bin/awsprof-cli.exe` = leftover from their
+  earlier `go install` (safe to `rm`). They can move to v0.1.1 via
+  `go install github.com/payfacto/awsprof-cli/cmd/awsprof@latest`. The old
+  `awsp`/`awswho` shell functions still live in `~/.bashrc` (superseded, harmless).
+
+### Inferred next steps / backlog (all non-urgent)
+
+- **Homebrew cask migration:** GoReleaser deprecated `brews` (still works, warns);
+  the replacement `homebrew_casks` is macOS-only + hits Gatekeeper on unsigned
+  binaries. Defer until a macOS code-signing/notarization story - do them together.
+- **`identity.Check` test seam:** non-blocking architecture suggestion from the
+  review (introduce an STS-client interface so the login-retry path is unit
+  testable) - not done.
+- Optional coloring follow-ups: YAML-configurable env colors; `AdaptiveColor` for
+  light terminals; confirm the huh *selected* (highlighted) colored picker row
+  (only non-selected rows were screenshot-verified).
+
+### Suggested skills for next session
+
+- `go-release` runbook ([GO-RELEASE-PATTERNS.md](GO-RELEASE-PATTERNS.md)) for the
+  next `vX.Y.Z`.
+- `clean-code:go` / `code-review-expert` for further Go work.
