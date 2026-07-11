@@ -2,15 +2,19 @@
 package cmd
 
 import (
-	"github.com/payfacto/awsprof-cli/internal/version"
 	"github.com/spf13/cobra"
 )
+
+// Version is the CLI version. It defaults to "dev" for plain `go build` and is
+// overridden at release time via
+// -ldflags -X 'github.com/payfacto/awsprof-cli/cmd.Version=...'.
+var Version = "dev"
 
 var rootCmd = &cobra.Command{
 	Use:           "awsprof [profile]",
 	Short:         "Pick an AWS profile to log in as",
 	Args:          cobra.MaximumNArgs(1),
-	Version:       version.Version,
+	Version:       Version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {

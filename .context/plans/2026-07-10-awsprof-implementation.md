@@ -27,13 +27,12 @@
 
 - Create: `go.mod` (via `go mod init`)
 - Create: `main.go`
-- Create: `internal/version/version.go`
 - Create: `cmd/root.go`
 
 **Interfaces:**
 
 - Consumes: nothing (first task).
-- Produces: `cmd.Execute() error`; `version.Version string`; `rootCmd` (a `*cobra.Command` with `Use: "awsprof [profile]"`, `Args: cobra.MaximumNArgs(1)`, `Version` wired). Later tasks attach subcommands via `rootCmd.AddCommand(...)` and fill `rootCmd.RunE`.
+- Produces: `cmd.Execute() error`; `cmd.Version string` (default `"dev"`, wired into `rootCmd.Version`; this is the exact symbol the Makefile and .goreleaser.yaml inject via ldflags); `rootCmd` (a `*cobra.Command` with `Use: "awsprof [profile]"`, `Args: cobra.MaximumNArgs(1)`). Later tasks attach subcommands via `rootCmd.AddCommand(...)` and fill `rootCmd.RunE`.
 
 - [ ] **Step 1: Initialize the repo, module, and dependencies**
 
@@ -45,37 +44,30 @@ go get github.com/spf13/cobra@latest
 
 Expected: `go.mod` created with module `github.com/payfacto/awsprof-cli` and a `require github.com/spf13/cobra`.
 
-- [ ] **Step 2: Write the version package**
+- [ ] **Step 2: Write the root command, version var, and Execute**
 
-Create `internal/version/version.go`:
-
-```go
-// Package version holds the build version, injected via -ldflags at build time.
-package version
-
-// Version is the CLI version. It defaults to "dev" for plain `go build` and is
-// overridden at release time via -ldflags -X.
-var Version = "dev"
-```
-
-- [ ] **Step 3: Write the root command and Execute**
-
-Create `cmd/root.go`:
+Create `cmd/root.go`. `Version` lives in package `cmd` so that
+`-X 'github.com/payfacto/awsprof-cli/cmd.Version=...'` (Makefile / .goreleaser.yaml)
+targets a real symbol:
 
 ```go
 // Package cmd wires the awsprof command tree.
 package cmd
 
 import (
-	"github.com/payfacto/awsprof-cli/internal/version"
 	"github.com/spf13/cobra"
 )
+
+// Version is the CLI version. It defaults to "dev" for plain `go build` and is
+// overridden at release time via -ldflags -X on
+// github.com/payfacto/awsprof-cli/cmd.Version.
+var Version = "dev"
 
 var rootCmd = &cobra.Command{
 	Use:           "awsprof [profile]",
 	Short:         "Pick an AWS profile to log in as",
 	Args:          cobra.MaximumNArgs(1),
-	Version:       version.Version,
+	Version:       Version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -90,14 +82,16 @@ func Execute() error {
 }
 ```
 
-- [ ] **Step 4: Write main.go**
+- [ ] **Step 3: Write main.go**
 
-Create `main.go`:
+Create `main.go`. It prints any error to stderr before exiting non-zero
+(rootCmd sets `SilenceErrors: true`, so main is responsible for the message):
 
 ```go
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/payfacto/awsprof-cli/cmd"
@@ -105,12 +99,13 @@ import (
 
 func main() {
 	if err := cmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 ```
 
-- [ ] **Step 5: Build and verify version/help**
+- [ ] **Step 4: Build and verify version/help**
 
 ```bash
 go build -o awsprof .
@@ -120,11 +115,11 @@ go build -o awsprof .
 
 Expected: builds with no error; `--version` prints `awsprof version dev`; `--help` shows usage with `awsprof [profile]`.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 gofmt -w . && go vet ./...
-git add go.mod go.sum main.go cmd/root.go internal/version/version.go
+git add go.mod go.sum main.go cmd/root.go
 git commit -m "feat: bootstrap awsprof module, version, and CLI skeleton"
 ```
 
