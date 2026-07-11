@@ -1,0 +1,36 @@
+# Bitbucket is the source of truth; GitHub is a mirror that hosts CI + releases.
+# This pipeline force-pushes main and tags to GitHub, where
+# .github/workflows/release.yml runs GoReleaser on any pushed v* tag.
+#
+# One-time setup (see .context/GO-RELEASE-PATTERNS.md):
+#   1. Repository settings -> Pipelines -> SSH keys -> Generate keys
+#   2. Add the public key as a write-enabled deploy key on
+#      github.com/payfacto/awsprof-cli
+#   3. Repository settings -> Pipelines -> SSH keys -> Known hosts -> add github.com
+#   4. Enable Pipelines
+#
+# Never push directly to the GitHub mirror - this pipeline force-pushes and will
+# overwrite divergent state.
+
+image: alpine/git:latest
+
+clone:
+  depth: full # required so GitHub Actions `git describe --tags` resolves the version
+
+definitions:
+  steps:
+    - step: &mirror-to-github
+        name: Mirror to GitHub
+        script:
+          - git fetch origin
+          - git remote add github git@github.com:payfacto/awsprof-cli.git
+          - git push github refs/remotes/origin/main:refs/heads/main --force
+          - git push github --tags --force
+
+pipelines:
+  branches:
+    main:
+      - step: *mirror-to-github
+  tags:
+    "v*":
+      - step: *mirror-to-github
