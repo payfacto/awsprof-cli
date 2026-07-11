@@ -29,6 +29,14 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# Pin the release target so the GitHub Release and the Homebrew formula URLs are
+# always github.com/payfacto/awsprof-cli, independent of which git remote
+# GoReleaser infers (locally `origin` is the Bitbucket source-of-truth remote).
+release:
+  github:
+    owner: payfacto
+    name: awsprof-cli
+
 changelog:
   sort: asc
   filters:
