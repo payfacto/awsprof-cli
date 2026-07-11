@@ -28,7 +28,7 @@ func Parse(s string) (Shell, error) {
 	case "powershell", "pwsh":
 		return PowerShell, nil
 	default:
-		return 0, fmt.Errorf("unsupported shell %q (want bash|zsh|fish|powershell)", s)
+		return 0, fmt.Errorf("unsupported shell %q (want bash|zsh|fish|powershell|pwsh)", s)
 	}
 }
 

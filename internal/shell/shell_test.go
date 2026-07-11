@@ -50,3 +50,12 @@ func TestHook_ContainsWrapperAndPassthrough(t *testing.T) {
 		t.Errorf("powershell hook missing function")
 	}
 }
+
+func TestHook_EmbedsShellName(t *testing.T) {
+	if !strings.Contains(Bash.Hook(), "--shell bash") {
+		t.Errorf("bash hook must embed --shell bash")
+	}
+	if !strings.Contains(Zsh.Hook(), "--shell zsh") {
+		t.Errorf("zsh hook must embed --shell zsh")
+	}
+}
