@@ -130,3 +130,163 @@ persistent `--shell`. Packages: `internal/{config,profiles,sso,identity,picker,s
 - `verify` / manual smoke on a real SSO profile.
 - `go-release` runbook ([GO-RELEASE-PATTERNS.md](GO-RELEASE-PATTERNS.md)) when cutting v0.1.0.
 - `handoff` to append the next block.
+
+---
+
+## Session - 2026-07-11 09:08 (Picker UX fixes for Git Bash)
+
+### What shipped
+
+Fixed the interactive picker on Windows Git Bash (MINGW64/mintty), reported
+live by the user. Two commits on top of `a393e37`, TDD'd, all checks clean
+(gofmt, `go vet`, 36 tests across 8 packages), verified live in Git Bash.
+
+- **`4e7fea8`** - bounded the select `Height` + footer cleanup + dep note.
+- **`648956d`** - stop starting in filter mode + always-visible cancel hint.
+
+All changes are in [internal/picker/picker.go](internal/picker/picker.go) and
+its test, plus `go.mod` and [TECHSTACK.md](TECHSTACK.md).
+
+### Root causes / durable facts (huh v1.0.0 internals)
+
+- **Runaway scroll:** a `huh.Select` with static `Options(...)` and no `Height`
+  sizes its viewport to the *full* option count. huh only clamps it to the
+  terminal on a `tea.WindowSizeMsg`, which Git Bash/mintty does not reliably
+  send - so the frame overflowed and the terminal scrolled, pushing the
+  selection cursor off-screen. Fix: set an explicit `Height` from
+  `term.GetSize(os.Stderr.Fd())` (new pure `selectHeight` helper, unit-tested),
+  with a safe fallback when the size is unknown. `github.com/charmbracelet/x/term`
+  promoted from indirect to a direct dep.
+- **`Select.Filtering(true)` is a misnomer:** it does not *enable* filtering, it
+  *starts* the field in filter mode (`filtering=true` + focuses the filter box).
+  The `/` filter is available by default regardless. That one call caused the
+  auto-open filter box, hid the title (huh renders the filter *instead of* the
+  title while filtering), and short-circuited huh's per-position key setup
+  (`WithPosition` returns early when `filtering`), which left the prev/next
+  bindings enabled -> the duplicate `enter select`/`enter submit` footer.
+  Fix: removed `Filtering(true)`.
+- **Footer help = field bindings only** (`group.go:391` builds it from
+  `field.KeyBinds()`). The form-level `Quit` (ctrl+c) is never shown there, so a
+  cancel hint cannot live in the footer. Put it in the field **Description**
+  (rendered in every state, incl. filtering) - the Title is unusable for this
+  because it is swapped out for the filter box while filtering.
+- **Esc cannot be a cancel key:** it is reserved for filter set/clear, and the
+  form matches `Quit` *before* the field sees the key (`form.go:558`), so binding
+  Esc to quit would abort mid-filter and break filtering. **Ctrl+C is the cancel
+  key** and already aborts cleanly ([cmd/root.go](../cmd/root.go) handles
+  `picker.ErrAborted` -> return nil, no export, no SSO).
+- `pickerKeyMap()` disables the meaningless prev/next bindings on the
+  single-field picker and relabels Submit's Enter as "select".
+
+Net UX now: opens on the list (no auto-filter), title + `ctrl+c to cancel`
+visible, `/` filters, footer reads `up . down . / filter . enter select`.
+
+### Running state
+
+- On `main` @ `648956d`, clean tree. Nothing pushed (still no remote).
+- Rebuilt `./awsprof` in the repo root (git-ignored). No background processes.
+
+### Inferred next steps
+
+- Backlog unchanged and now the headline item: **cut v0.1.0** on user go-ahead
+  (add remote, push `main`, tag `v0.1.0`; `HOMEBREW_TAP_TOKEN` repo secret for
+  the Homebrew step).
+- Prior minor follow-ups still stand: `shell.ExportLine` escaping, friendlier
+  SSO-region error, small test-coverage gaps.
+- Live picker render is now exercised on Git Bash (nav, filter, cancel all
+  confirmed); native bash/zsh/fish *hooks* still only unit-tested.
+
+### Suggested skills for next session
+
+- `go-release` runbook when cutting v0.1.0.
+- `clean-code:go` for further Go work.
+
+---
+
+## Session - 2026-07-11 10:19 (Environment coloring feature)
+
+### What shipped
+
+Brainstormed and implemented environment-based coloring of profile names.
+Two commits on top of `648956d`: `7b7c817` (design spec) and `a54bd56` (the
+feature). gofmt/`go vet` clean, **61 tests pass across 9 packages**, binary
+builds. Delivered TDD (envcolor package test-first) with live verification.
+
+- **New `internal/envcolor`** (pure): `Detect(name) (Env, idx)` matches the env
+  keyword against whole hyphen-segments (case-insensitive, first match wins);
+  `Render(name, *lipgloss.Renderer)` colors **only** the matched segment
+  ("Style D") and returns unrecognized names unchanged.
+- **Wired into** `list` ([cmd/list.go](../cmd/list.go)), the picker
+  ([internal/picker/picker.go](../internal/picker/picker.go), colored at the
+  huh-option boundary), `whoami` ([cmd/whoami.go](../cmd/whoami.go)), and the
+  unknown-profile fallback list (`printProfiles` in
+  [cmd/activate.go](../cmd/activate.go)).
+- **`whoami` reframe:** when `AWS_PROFILE` is unset it now prints the effective
+  `default` with a dim `(unset)` hint (extracted testable `whoamiLine`), instead
+  of the old `(unset -> default)` literal.
+- **lipgloss** promoted from indirect to a direct dependency (no `go.sum`
+  change; already present). Docs synced: the
+  [spec](specs/2026-07-11-env-color-design.md) and INDEX, README, llms.txt,
+  CLAUDE.md, TECHSTACK.md.
+
+### Key decisions / facts (durable)
+
+- **Palette (hardcoded, not configurable):** prod=**bold** red, staging=orange,
+  uat=purple, qa=yellow, dev=green, sandbox=blue; no-env names stay plain.
+  Aliases: prod|production, staging|stage|stg, uat, qa, dev|development,
+  sandbox|test|sbx. `test` maps to **sandbox** (per user), not dev.
+- **Style D** (color the env segment only, name otherwise normal) was chosen
+  over whole-name / badge / dimmed-remainder variants. Selected via live sideshow
+  mockups after terminal ANSI and AskUserQuestion previews failed to render color
+  for the user - **sideshow is the way to show color/visual options to this
+  user** (session "Profile environment coloring").
+- **Color safety is delegated to lipgloss:** a `*lipgloss.Renderer` bound to the
+  target stream (stdout for list/whoami, stderr for picker/fallback) auto-detects
+  color depth and honors `NO_COLOR`, non-TTY, and Windows VT. `list --plain`
+  bypasses coloring entirely. All four paths verified byte-clean on the real
+  binary; lipgloss also suppresses the faint attribute when color is off (so no
+  guard needed).
+- **Color-depth behavior:** at 256-color (user's `xterm-256color`) all six envs
+  resolve to distinct codes (prod 203, staging 215, uat 176, qa 221, dev 71,
+  sandbox 75). Only pure **16-color** terminals collapse orange->bright-red,
+  colliding staging with prod - mitigated by prod's bold. Documented as a v1
+  non-goal (adaptive/AdaptiveColor deferred).
+- Scope intentionally excludes: YAML-configurable colors, `--color` flag,
+  light-vs-dark adaptive hues (all v1 non-goals in the spec).
+
+### Running state
+
+- On `main` @ `a54bd56`, nothing pushed (still no git remote).
+- `.context/HANDOFF.md` was carrying an uncommitted 09:08 block from a prior
+  session; this block is appended on top and both are being committed together
+  now.
+- `./awsprof` rebuilt in repo root (git-ignored). No background processes.
+
+### Verified vs. residual
+
+- Verified live: `list` (user screenshot - Style D correct), the **picker**
+  (user screenshot - env colors intact on all rows, huh not clobbering),
+  `whoami` unset framing + forced-color + piped-clean (via built binary),
+  and the NO_COLOR / non-TTY / `--plain` off-paths.
+- **Residual (low):** the user's picker screenshot had the cursor on an
+  *uncolored* row (`default`), so a *highlighted colored* row is not explicitly
+  confirmed. Non-selected colored rows are fine. If huh's selected-row style ever
+  visibly clobbers the env color, fallback is a huh theme tweak (don't override
+  the option foreground) or a colored leading marker.
+
+### Inferred next steps
+
+- Headline backlog item is unchanged: **cut v0.1.0** on user go-ahead (add
+  remote, push `main`, tag `v0.1.0`; `HOMEBREW_TAP_TOKEN` repo secret needed).
+- Prior minor follow-ups still stand: `shell.ExportLine` escaping, friendlier
+  SSO-region error, small test-coverage gaps.
+- Optional coloring follow-ups if ever wanted: confirm the highlighted colored
+  picker row; add YAML-configurable env colors; `AdaptiveColor` for light
+  terminals.
+
+### Suggested skills for next session
+
+- `go-release` runbook ([GO-RELEASE-PATTERNS.md](GO-RELEASE-PATTERNS.md)) when
+  cutting v0.1.0.
+- `clean-code:go` for further Go work; `sideshow` to show the user any
+  color/visual options.
