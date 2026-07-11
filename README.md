@@ -25,9 +25,6 @@ reuses the same cached token.
 
 ## Install
 
-> Distribution is wired up but no release has been cut yet; these will work once
-> the first `v*` tag is published.
-
 ### Homebrew (macOS / Linux)
 
 ```bash
