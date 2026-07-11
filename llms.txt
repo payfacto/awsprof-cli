@@ -1,0 +1,64 @@
+# awsprof - AWS profile switcher CLI
+
+`awsprof` is a command-line tool (binary `awsprof` / `awsprof.exe`) for picking
+an AWS profile to log in as, from the list of profiles available on the machine.
+It reads the standard AWS shared config files and lets you select/activate one.
+
+> Status: early / in design. Scaffolding, docs, and release pipeline exist; the
+> concrete command surface is being defined. The commands below describe the
+> intended shape and will change as the design settles.
+
+## Installation
+
+```bash
+# macOS / Linux via Homebrew (once the first release is cut)
+brew tap payfacto/tap
+brew install payfacto/tap/awsprof
+
+# Pre-built binaries (Linux/macOS/Windows, amd64+arm64)
+# Download an archive from https://github.com/payfacto/awsprof-cli/releases
+# and place the `awsprof` binary on your PATH.
+
+# Go developers
+go install github.com/payfacto/awsprof-cli@latest
+
+# Or build locally
+go build -o awsprof .
+```
+
+## Profile discovery
+
+Profiles come from the standard AWS locations:
+
+- `~/.aws/config` - `[profile NAME]` and `[sso-session NAME]` sections
+- `~/.aws/credentials` - `[NAME]` sections
+- Overrides: `AWS_CONFIG_FILE`, `AWS_SHARED_CREDENTIALS_FILE`
+
+`awsprof` reads these files. It does not write long-lived credentials into a
+config of its own.
+
+## Commands (intended shape, in design)
+
+```
+awsprof                 # interactive: pick a profile from the list
+awsprof list            # print the available profiles
+awsprof use PROFILE     # select/activate a specific profile
+awsprof --version       # print version
+awsprof --help          # help
+```
+
+The details still to be decided: how a profile is "activated" (export
+`AWS_PROFILE`, run `aws sso login --profile`, print credentials), the output
+formats, and whether the bare command opens an interactive picker or prints
+help. Prefer explicit subcommands in scripts once they exist; do not rely on
+the bare interactive form in automation.
+
+## Notes for AI agents
+
+- This project was seeded from an unrelated Bitbucket CLI (`bb`) as a template.
+  It has no Bitbucket functionality; ignore any residual references.
+- There is no Go source yet - the command surface is being designed. Check
+  `.context/HANDOFF.md` and `.context/specs/` for the current plan before
+  assuming a command exists.
+- Once implemented, the CLI is expected to exit non-zero on error and write
+  errors to stderr, keeping stdout clean for machine-readable output.

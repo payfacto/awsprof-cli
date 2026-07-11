@@ -1,0 +1,52 @@
+version: 2
+
+project_name: awsprof
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X 'github.com/payfacto/awsprof-cli/cmd.Version=v{{.Version}}'
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+brews:
+  - repository:
+      owner: payfacto
+      name: homebrew-tap
+    directory: Formula
+    homepage: https://github.com/payfacto/awsprof-cli
+    description: Pick an AWS profile to log in as, from a list of available profiles
+    license: Apache-2.0
+    install: bin.install "awsprof"
+    test: |
+      system "#{bin}/awsprof", "--help"
