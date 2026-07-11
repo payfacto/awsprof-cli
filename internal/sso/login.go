@@ -13,6 +13,14 @@ import (
 	"github.com/payfacto/awsprof-cli/internal/profiles"
 )
 
+// Device-authorization polling intervals (RFC 8628). defaultPollInterval is
+// used when the server does not supply one; slowDownIncrement is added on each
+// SlowDown response.
+const (
+	defaultPollInterval = 5 * time.Second
+	slowDownIncrement   = 5 * time.Second
+)
+
 // ErrLoginDenied is returned when the user denies the device authorization.
 var ErrLoginDenied = errors.New("sso login denied")
 
@@ -60,7 +68,7 @@ func Login(ctx context.Context, c OIDCClient, open Opener, cfg profiles.SSOConfi
 
 	interval := time.Duration(auth.Interval) * time.Second
 	if interval <= 0 {
-		interval = 5 * time.Second
+		interval = defaultPollInterval
 	}
 	deadline := now().Add(time.Duration(auth.ExpiresIn) * time.Second)
 
@@ -94,7 +102,7 @@ func Login(ctx context.Context, c OIDCClient, open Opener, cfg profiles.SSOConfi
 		case errors.As(err, &pending):
 			// keep polling
 		case errors.As(err, &slow):
-			interval += 5 * time.Second
+			interval += slowDownIncrement
 		case errors.As(err, &denied):
 			return Token{}, ErrLoginDenied
 		case errors.As(err, &expired):

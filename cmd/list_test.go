@@ -16,16 +16,22 @@ func testRenderer(p termenv.Profile) *lipgloss.Renderer {
 	return r
 }
 
-func TestRenderList(t *testing.T) {
-	ps := []profiles.Profile{{Name: "alpha"}, {Name: "beta"}}
-	r := testRenderer(termenv.Ascii)
+func TestRenderPlainList(t *testing.T) {
+	ps := []profiles.Profile{{Name: "alpha"}, {Name: "payfacto-titan-prod-readonly"}}
 
-	plain := renderList(ps, "beta", true, r)
-	if plain != "alpha\nbeta\n" {
+	plain := renderPlainList(ps)
+	if plain != "alpha\npayfacto-titan-prod-readonly\n" {
 		t.Fatalf("plain = %q", plain)
 	}
+	// --plain must never colorize.
+	if strings.Contains(plain, "\x1b[") {
+		t.Fatalf("--plain must stay byte-clean, got %q", plain)
+	}
+}
 
-	human := renderList(ps, "beta", false, r)
+func TestRenderList(t *testing.T) {
+	ps := []profiles.Profile{{Name: "alpha"}, {Name: "beta"}}
+	human := renderList(ps, "beta", testRenderer(termenv.Ascii))
 	if !strings.Contains(human, "beta *") {
 		t.Fatalf("active profile not marked: %q", human)
 	}
@@ -36,16 +42,8 @@ func TestRenderList(t *testing.T) {
 
 func TestRenderListColorsEnvSegment(t *testing.T) {
 	ps := []profiles.Profile{{Name: "payfacto-titan-prod-readonly"}}
-	r := testRenderer(termenv.TrueColor)
-
-	human := renderList(ps, "", false, r)
+	human := renderList(ps, "", testRenderer(termenv.TrueColor))
 	if !strings.Contains(human, "\x1b[") {
 		t.Fatalf("expected env color escapes, got %q", human)
-	}
-
-	// --plain must never colorize, even with a color-capable renderer.
-	plain := renderList(ps, "", true, r)
-	if strings.Contains(plain, "\x1b[") {
-		t.Fatalf("--plain must stay byte-clean, got %q", plain)
 	}
 }

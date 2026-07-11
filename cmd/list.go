@@ -27,23 +27,32 @@ var listCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if listPlain {
+			fmt.Fprint(os.Stdout, renderPlainList(ps))
+			return nil
+		}
 		r := lipgloss.NewRenderer(os.Stdout)
-		fmt.Fprint(os.Stdout, renderList(ps, os.Getenv("AWS_PROFILE"), listPlain, r))
+		fmt.Fprint(os.Stdout, renderList(ps, os.Getenv("AWS_PROFILE"), r))
 		return nil
 	},
 }
 
-// renderList formats the profile list. --plain (plain=true) emits bare names
-// with no marker or color for scripting. Otherwise each name is colored by its
-// environment through r (which decides whether escapes are actually emitted),
-// and the active profile is marked with " *".
-func renderList(ps []profiles.Profile, active string, plain bool, r *lipgloss.Renderer) string {
+// renderPlainList emits bare profile names, one per line, with no marker or
+// color - the script-friendly `--plain` form.
+func renderPlainList(ps []profiles.Profile) string {
 	var b strings.Builder
 	for _, p := range ps {
-		if plain {
-			fmt.Fprintf(&b, "%s\n", p.Name)
-			continue
-		}
+		fmt.Fprintf(&b, "%s\n", p.Name)
+	}
+	return b.String()
+}
+
+// renderList formats the human profile list: each name colored by its
+// environment through r (which decides whether escapes are actually emitted),
+// with the active profile marked " *".
+func renderList(ps []profiles.Profile, active string, r *lipgloss.Renderer) string {
+	var b strings.Builder
+	for _, p := range ps {
 		mark := ""
 		if p.Name == active {
 			mark = " *"

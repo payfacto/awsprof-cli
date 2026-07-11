@@ -110,14 +110,17 @@ func ListFrom(cfgPath, credPath string) ([]Profile, error) {
 	out := make([]Profile, 0, len(names))
 	for name := range names {
 		p := Profile{Name: name}
-		classify(&p, cfgSecs[name], credSecs[name], sessions)
+		p.Type, p.SSO = classify(cfgSecs[name], credSecs[name], sessions)
 		out = append(out, p)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }
 
-func classify(p *Profile, cfgSec, credSec *ini.Section, sessions map[string]SSOConfig) {
+// classify determines a profile's type and (for SSO profiles) its resolved SSO
+// settings from its config/credentials sections. It is a pure query: it returns
+// the values rather than mutating a profile in place.
+func classify(cfgSec, credSec *ini.Section, sessions map[string]SSOConfig) (Type, *SSOConfig) {
 	get := func(key string) string {
 		if cfgSec != nil {
 			if v := cfgSec.Key(key).String(); v != "" {
@@ -137,28 +140,25 @@ func classify(p *Profile, cfgSec, credSec *ini.Section, sessions map[string]SSOC
 		if s, ok := sessions[session]; ok {
 			sc.StartURL, sc.Region = s.StartURL, s.Region
 		}
-		p.Type, p.SSO = TypeSSO, &sc
-		return
+		return TypeSSO, &sc
 	}
 	if url := get("sso_start_url"); url != "" {
-		p.Type = TypeSSO
-		p.SSO = &SSOConfig{
+		return TypeSSO, &SSOConfig{
 			StartURL:  url,
 			Region:    get("sso_region"),
 			AccountID: get("sso_account_id"),
 			RoleName:  get("sso_role_name"),
 		}
-		return
 	}
 	switch {
 	case get("credential_process") != "":
-		p.Type = TypeProcess
+		return TypeProcess, nil
 	case get("role_arn") != "":
-		p.Type = TypeAssumeRole
+		return TypeAssumeRole, nil
 	case get("aws_access_key_id") != "":
-		p.Type = TypeStatic
+		return TypeStatic, nil
 	default:
-		p.Type = TypeUnknown
+		return TypeUnknown, nil
 	}
 }
 
