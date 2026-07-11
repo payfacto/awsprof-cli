@@ -8,6 +8,9 @@ import (
 	"github.com/payfacto/awsprof-cli/internal/profiles"
 )
 
+// ErrAborted is returned by Pick when the user cancels the selection (Esc/Ctrl-C).
+var ErrAborted = huh.ErrUserAborted
+
 // Item is one selectable profile row.
 type Item struct {
 	Label string

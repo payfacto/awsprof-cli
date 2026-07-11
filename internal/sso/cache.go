@@ -58,6 +58,10 @@ func CacheFilePath(session, startURL string) (string, error) {
 }
 
 // ReadToken loads a cached token from path.
+//
+// Note: awsprof's activation path delegates SSO token cache validation to the
+// AWS SDK (which reads the same cache file); this helper is provided for
+// callers/tests and future use.
 func ReadToken(path string) (Token, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -104,6 +108,10 @@ func WriteToken(path string, tok Token) error {
 }
 
 // Valid reports whether the token is present and not within the expiry skew.
+//
+// Note: awsprof's activation path delegates SSO token cache validation to the
+// AWS SDK (which reads the same cache file); this helper is provided for
+// callers/tests and future use.
 func (t Token) Valid(now time.Time) bool {
 	if t.AccessToken == "" {
 		return false

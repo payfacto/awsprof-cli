@@ -43,6 +43,9 @@ var rootCmd = &cobra.Command{
 
 		choice, err := picker.Pick(picker.BuildItems(ps, os.Getenv("AWS_PROFILE")))
 		if err != nil {
+			if errors.Is(err, picker.ErrAborted) {
+				return nil // user cancelled the picker; nothing to activate
+			}
 			return err
 		}
 		if choice == "" {
