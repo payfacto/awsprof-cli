@@ -54,7 +54,9 @@ func Login(ctx context.Context, c OIDCClient, open Opener, cfg profiles.SSOConfi
 
 	url := aws.ToString(auth.VerificationUriComplete)
 	fmt.Fprintf(os.Stderr, "Opening browser to authorize SSO login...\nIf it does not open, visit: %s\nUser code: %s\n", url, aws.ToString(auth.UserCode))
-	_ = open(url)
+	if err := open(url); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not open browser: %v\n", err)
+	}
 
 	interval := time.Duration(auth.Interval) * time.Second
 	if interval <= 0 {
