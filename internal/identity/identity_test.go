@@ -2,6 +2,7 @@ package identity
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/aws/smithy-go"
@@ -41,5 +42,20 @@ func TestNeedsLogin_APIErrorNotLogin(t *testing.T) {
 	}
 	if NeedsLogin(denied) {
 		t.Error("API AccessDenied (SSO-assumed-role) must not be treated as needs-login")
+	}
+}
+
+// Real-world shape observed in a live smoke test: an expired SSO token whose
+// refresh fails. The STS GetCallerIdentity error wraps a credential-resolution
+// failure that wraps an ssooidc InvalidGrantException (a smithy.APIError). This
+// MUST be treated as needs-login even though a smithy.APIError is in the chain -
+// otherwise `awsprof <sso-profile>` errors out instead of re-logging in.
+func TestNeedsLogin_ExpiredSSOTokenWrappingAPIError(t *testing.T) {
+	inner := &smithy.GenericAPIError{Code: "InvalidGrantException", Message: ""}
+	err := fmt.Errorf("operation error STS: GetCallerIdentity, get identity: get credentials: "+
+		"failed to refresh cached credentials, refresh cached SSO token failed, unable to refresh "+
+		"SSO token, operation error SSO OIDC: CreateToken, https response error StatusCode: 400: %w", inner)
+	if !NeedsLogin(err) {
+		t.Errorf("expired SSO token (refresh failed, wraps InvalidGrantException) must be needs-login; got false")
 	}
 }

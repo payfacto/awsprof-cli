@@ -3,13 +3,11 @@ package identity
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	"github.com/aws/smithy-go"
 )
 
 // Identity is the resolved AWS caller identity.
@@ -32,35 +30,40 @@ func Check(ctx context.Context, profile string) (Identity, error) {
 }
 
 // NeedsLogin reports whether err indicates a missing or expired SSO token,
-// meaning the caller should run an SSO login rather than fix permissions.
+// meaning the caller should run an SSO login rather than surface the error.
 //
-// The classification is two-stage:
+// It matches positive SSO-token-failure signals in the error text. Those appear
+// in credential-resolution failures - including when a stale token's refresh
+// fails, where the STS error wraps an ssooidc InvalidGrantException (itself a
+// smithy API error). They do NOT appear in a plain STS authorization denial
+// such as AccessDenied - even one whose message embeds an AWSReservedSSO_
+// assumed-role ARN - so a permissions problem never triggers a spurious login.
 //
-//  1. If err is a smithy API error, the request reached AWS and got a
-//     response, so credentials resolved fine. That makes it an
-//     authorization/service problem (for example AccessDenied, possibly with
-//     an AWSReservedSSO_ assumed-role ARN in the message) - never a login
-//     problem - so we return false.
-//  2. Otherwise err is a credential-resolution failure. We match it against
-//     SSO-token-expiry wording; a bare mention of "sso" is not enough.
-//
-// The exact text the SSO credential provider returns for an expired token is
-// still a deferred live-confirmation item; the wording matched below is the
-// starting point.
+// The signals were confirmed against a real expired-SSO error observed in a
+// live smoke test. Note: an earlier version short-circuited to false on any
+// smithy.APIError in the chain, which wrongly classified the common
+// expired-token case (its chain contains an ssooidc InvalidGrantException) as
+// "not a login problem". Match on the token-failure wording instead.
 func NeedsLogin(err error) bool {
 	if err == nil {
 		return false
 	}
-	// A response came back from AWS, so credentials resolved: not a login issue.
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
-		return false
-	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "expired") ||
-		strings.Contains(msg, "run aws sso login") ||
-		strings.Contains(msg, "refresh") ||
-		strings.Contains(msg, "invalid_grant") ||
-		strings.Contains(msg, "sso session") ||
-		strings.Contains(msg, "sso token")
+	signals := []string{
+		"refresh cached sso token",
+		"refresh sso token",
+		"sso token",
+		"sso session has expired",
+		"invalidgrant", // ssooidc InvalidGrantException (stale token refresh)
+		"expiredtoken", // ssooidc ExpiredTokenException
+		"token has expired",
+		"run aws sso login",
+		"no cached sso",
+	}
+	for _, s := range signals {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
