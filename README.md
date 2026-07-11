@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="awsprof - pick an AWS profile, login, go. A small Go CLI for humans and scripts." width="100%">
+</p>
+
 # awsprof - AWS profile switcher CLI
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -22,6 +26,10 @@ a single command instead of a grep through dotfiles.
 directly through `aws-sdk-go-v2`. Its SSO token cache is aws-CLI-compatible, so
 a subsequent `aws sts get-caller-identity` (or any other AWS CLI/SDK call)
 reuses the same cached token.
+
+<p align="center">
+  <img src="assets/example.png" alt="awsprof in action: the interactive picker with profiles color-coded by environment (dev green, qa yellow, staging orange, prod red, sandbox blue), and 'awsprof whoami' showing the active identity - SSO login runs via device flow only when needed." width="100%">
+</p>
 
 ## Install
 
