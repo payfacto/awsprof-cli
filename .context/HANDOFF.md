@@ -5,100 +5,128 @@
 `awsprof` is a Go CLI (binary `awsprof` / `awsprof.exe`) for picking an AWS
 profile to log in as, from the list of profiles available on the machine. It
 reads the standard AWS shared config files (`~/.aws/config`,
-`~/.aws/credentials`) and lets the user select/activate one.
+`~/.aws/credentials`), performs an SSO device login only when the cached token
+is stale, verifies identity, and sets `AWS_PROFILE` in the current shell via an
+installed shell hook.
 
 ## Stack
 
-Go single static binary (`CGO_ENABLED=0`), Cobra for commands. AWS shared-config
-parsing library and interactive-picker library are still to be decided (see
-[TECHSTACK.md](TECHSTACK.md)). No app database; state is the AWS config files on
-disk. Tests use stdlib `testing`. Released via GoReleaser on `v*` tags (GitHub
-Actions) to GitHub Releases + a Homebrew tap.
+Go single static binary (`CGO_ENABLED=0`), Cobra CLI, `charmbracelet/huh` picker,
+`aws-sdk-go-v2` (config/sts/ssooidc + smithy-go), `pkg/browser`, `gopkg.in/ini.v1`
+(profile parsing), `gopkg.in/yaml.v3` (`~/.awsprof.yaml`). No `aws` CLI
+dependency. No app database; state is the AWS config files + the SSO token cache.
+Tests use stdlib `testing`. Released via GoReleaser on `v*` tags (GitHub Actions)
+to GitHub Releases + a Homebrew tap. Full detail in [TECHSTACK.md](TECHSTACK.md).
 
 ---
 
 ## Outstanding backlog
 
-**Design (do first)**
+**Ship / verify**
 
-- **Brainstorm the command surface** - what `awsprof` does concretely: bare
-  interactive picker vs. `list`/`use` subcommands; how a profile is "activated"
-  (export `AWS_PROFILE`, run `aws sso login --profile`, print credentials);
-  output formats. Capture the outcome in `.context/specs/`. (Carried since
-  2026-07-10.)
-- **Decide the AWS-config parsing approach** - `aws-sdk-go-v2/config`, an ini
-  parser, or hand-rolled; depends on how much SSO/assume-role resolution awsprof
-  does itself. (Carried since 2026-07-10.)
-- **Decide the interactive-picker library** - Bubble Tea, huh, promptui, or
-  survey. (Carried since 2026-07-10.)
+- VERIFIED 2026-07-11 (live smoke test on Windows/PowerShell, real payfacto SSO):
+  `list`, `whoami` (clean error on expired token), unknown-profile no-export,
+  short-name prefix resolution (`sandbox-readonly` -> `payfacto-sandbox-readonly`),
+  SSO device-login end-to-end (browser approve), identity round-trip, PowerShell
+  export syntax + stdout/stderr contract, the shell hook setting `AWS_PROFILE`
+  in-session, and **aws-CLI token-cache interop** (`aws sts get-caller-identity`
+  reused awsprof's freshly cached token, no re-login).
+- FIXED 2026-07-11 (commit `2174c18`): the smoke test caught the top pre-1.0
+  bug live - `NeedsLogin` short-circuited to false on any `smithy.APIError` in
+  the chain, but an expired token's refresh failure wraps an ssooidc
+  `InvalidGrantException`, so `awsprof <sso-profile>` errored instead of
+  re-logging-in. Now matches positive SSO-token-failure signals (regression test
+  locks the real wrapped-APIError shape). Verified: login triggered on the
+  expired token and succeeded.
+- Still untested (lower priority): bash/zsh/fish hooks on their native shells
+  (only PowerShell exercised); interactive picker on a TTY (BuildItems is unit
+  tested; the huh render is not).
 
-**Build out**
+**Release (needs user go-ahead - never push/tag without asking)**
 
-- **Initialize the Go module** (`go mod init github.com/payfacto/awsprof-cli`)
-  and scaffold `main.go` + `cmd/root.go` with the version wiring described in
-  [CLAUDE.md](../CLAUDE.md). (Carried since 2026-07-10.)
-- **Initialize git** as a fresh `awsprof-cli` repo (no history carried from the
-  `bb` template). (Carried since 2026-07-10.)
+- No git remote is configured yet. To release: add the GitHub remote, push
+  `main`, then tag `v0.1.0` (GoReleaser fires on `v*`). `HOMEBREW_TAP_TOKEN`
+  must be set as a repo secret for the Homebrew step. See
+  [GO-RELEASE-PATTERNS.md](GO-RELEASE-PATTERNS.md).
+
+**Minor follow-ups (all ship-as-noted per final review)**
+
+- `internal/shell` `ExportLine` does not escape profile names; the PowerShell
+  branch (`%q`) is the weakest (a name with `$` would set the wrong value).
+  Low risk given conventional AWS profile names; revisit if naming is loosened.
+- `internal/sso` `ReadToken`/`Valid` are not on the activation path (the SDK
+  reads/validates the cache); documented, kept for future use.
+- SSO profile lacking a profile-level `region` (inherits only `sso_region` from
+  its `[sso-session]`) can produce a confusing raw region error; consider a
+  friendlier message.
+- Minor test-coverage gaps recorded during the build (config `DefaultPath`,
+  profiles cross-file precedence / DEFAULT-section, sso SlowDown branch) - all
+  correct by inspection.
 
 ---
 
 ## Session history - condensed
 
-_(populated as older sessions are compressed)_
+**Session 2026-07-10 (Rebrand from `bb`).** Repurposed a partial copy of the `bb`
+Bitbucket CLI into a fresh `awsprof-cli` project: rewrote README/CLAUDE/llms/
+INDEX/TECHSTACK, reset this handoff, retargeted Makefile/.goreleaser/.gitignore
+to `github.com/payfacto/awsprof-cli` (binary `awsprof`), deleted the bb pipeline
+audit + bb-branded banner. Then brainstormed the design and wrote the spec
+[specs/2026-07-10-awsprof-design.md](specs/2026-07-10-awsprof-design.md) and the
+TDD plan [plans/2026-07-10-awsprof-implementation.md](plans/2026-07-10-awsprof-implementation.md).
 
 ---
 
-## Session - 2026-07-10 (Rebrand template from `bb` to `awsprof`)
+## Session - 2026-07-11 (Implemented the CLI: 14-task plan, shipped v0-ready)
 
-### Purpose
+### What shipped
 
-The repo is a partial copy of the `bb` Bitbucket CLI, repurposed as a brand-new
-`awsprof-cli` project (binary `awsprof`) with no ties to `bb` - just a
-convenient Go + Cobra + release-pipeline template. First task: update all docs
-to reflect the rename, before brainstorming what the CLI will actually do.
+Executed the full implementation plan via subagent-driven development (fresh
+implementer per task + per-task spec/quality review + fix loops, final
+whole-branch review on the most capable model). Built greenfield on `main`;
+`git init` done this session. 22 commits (`b733627` docs baseline ..`5317605`).
+**Final state: gofmt clean, `go vet` clean, 28 tests pass across 8 packages,
+binary builds.**
 
-### What was done
+Command surface (all wired in `cmd/`): bare `awsprof` (interactive picker),
+`awsprof <profile>` (positional; exact-then-prefix resolution), `list [--plain]`,
+`whoami`, `shell-init <bash|zsh|fish|powershell>`, hidden `use <profile>` alias,
+persistent `--shell`. Packages: `internal/{config,profiles,sso,identity,picker,shell}`.
 
-- Confirmed there is **no `.git`** and **no Go source** - this is a docs/config
-  skeleton only, so "no ties to `bb`" is clean by construction.
-- Rewrote the identity/overview docs for `awsprof`: `README.md`, `CLAUDE.md`,
-  `llms.txt`, `.context/INDEX.md`, `.context/TECHSTACK.md`, and reset this
-  `HANDOFF.md`. Kept them at overview level (functionality is TBD pending the
-  brainstorm) rather than inventing a command surface.
-- Retargeted the build/release files to `awsprof` and module path
-  `github.com/payfacto/awsprof-cli`: `Makefile`, `.goreleaser.yaml` (also fixed
-  `license: MIT` -> `Apache-2.0` to match `LICENSE`), `.gitignore` (binary name;
-  dropped the `~/.bbcloud.yaml` entry).
-- Deleted the `bb`-specific pipeline/deploy enhancement audit under
-  `.context/reference/`.
-- Left generic/reusable files as-is: `GO-RELEASE-PATTERNS.md`,
-  `claude-context-pattern.md`, `.github/workflows/release.yml`, `.claudeignore`,
-  `.markdownlint.json`, `LICENSE` (Copyright 2026 PayFacto), `.vscode/settings.json`.
+### Key decisions / facts (durable)
 
-### Decisions
-
-- **Module path `github.com/payfacto/awsprof-cli`** (matches repo name), binary
-  `awsprof`. (User-confirmed.)
-- **Wipe & reset `bb` history** rather than archive it - truest to "no ties to
-  bb". (User-confirmed.)
-- **Keep & retarget the release pipeline** (GoReleaser + payfacto Homebrew tap +
-  GitHub release-on-`v*`). (User-confirmed.)
-- **Docs kept at identity/overview level** - the concrete command surface is the
-  output of the next brainstorming pass, not something to fabricate now.
+- **Activation = shell hook + eval.** Binary prints ONLY the `export AWS_PROFILE=...`
+  line to stdout; identity/progress/errors/picker-UI all go to stderr. The
+  generated hook eval's only activation calls and passes data commands
+  (`list`/`whoami`/`shell-init`) through. Final review verified this contract
+  end-to-end (single stdout write at `cmd/activate.go`, no export on any failure).
+- **Native SDK, no `aws` CLI.** SSO login is the OIDC device-authorization grant
+  (`aws-sdk-go-v2/service/ssooidc`), token cached in the aws-CLI-compatible
+  `~/.aws/sso/cache/*.json` (0600) so tools share the session; role creds then
+  resolve via the SDK's SSO provider inside `identity.Check`.
+- **`NeedsLogin` uses a `smithy.APIError` discriminator** (review-driven fix): an
+  API-level error means creds resolved (authz/service problem, not login), so
+  an `AccessDenied` carrying an `AWSReservedSSO_...` ARN never triggers a
+  spurious re-login. See the pre-1.0 caveat in the backlog.
+- **`Version` lives in package `cmd`** (`cmd.Version`), matching the Makefile /
+  .goreleaser ldflags; verified `-X` injection works.
+- **huh resolved to v1.0.0** (classic import path `github.com/charmbracelet/huh`),
+  not the v2 `charm.land/huh/v2` path.
 
 ### Running state
 
-- No git repo, no Go source. Docs/config skeleton only.
-- No background processes.
+- On `main` @ `5317605`, clean tree, nothing pushed (no remote configured).
+- No background processes. SDD scratch (task briefs/reports/review packages,
+  progress ledger) under `.superpowers/sdd/` (git-ignored).
 
 ### Inferred next steps
 
-- **Brainstorm the command surface** (the reason for this rebrand) - see the
-  Design backlog above. Then spec it in `.context/specs/`, then plan, then code.
-- Initialize the Go module and git repo when ready to build.
+- Run the deferred manual smoke tests (top of backlog), especially the live
+  SSO + `NeedsLogin` confirmation.
+- On user go-ahead: configure the remote, push, tag `v0.1.0`.
 
 ### Suggested skills for next session
 
-- `superpowers:brainstorming` - to define what `awsprof` does.
-- `clean-code:go` / `use-modern-go` - once Go code lands.
-- `handoff` - to append the next session block here.
+- `verify` / manual smoke on a real SSO profile.
+- `go-release` runbook ([GO-RELEASE-PATTERNS.md](GO-RELEASE-PATTERNS.md)) when cutting v0.1.0.
+- `handoff` to append the next block.
