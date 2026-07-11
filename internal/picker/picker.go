@@ -38,11 +38,12 @@ func BuildItems(ps []profiles.Profile, active string) []Item {
 // and the screen scrolls instead of moving the selection cursor.
 //
 // termHeight <= 0 means the size is unknown and a conservative fallback is used.
-// The returned height is never taller than the content itself (title + options)
-// nor shorter than a usable minimum.
+// The returned height is never taller than the content itself (title,
+// description, and options) nor shorter than a usable minimum.
 func selectHeight(termHeight, itemCount int) int {
 	const (
-		reserve  = 5  // lines for filter input, help footer, and padding
+		reserve  = 5  // lines for the help footer and padding
+		chrome   = 2  // the field's title and description lines
 		minRows  = 4  // smallest usable field height
 		fallback = 10 // used when the terminal size is unknown
 	)
@@ -50,8 +51,8 @@ func selectHeight(termHeight, itemCount int) int {
 	if termHeight > 0 {
 		rows = termHeight - reserve
 	}
-	if titleAndOptions := itemCount + 1; rows > titleAndOptions {
-		rows = titleAndOptions
+	if contentRows := itemCount + chrome; rows > contentRows {
+		rows = contentRows
 	}
 	if rows < minRows {
 		rows = minRows
@@ -71,10 +72,10 @@ func Pick(items []Item) (string, error) {
 	_, termHeight, _ := term.GetSize(os.Stderr.Fd())
 	var selected string
 	field := huh.NewSelect[string]().
-		Title("Select an AWS profile (ctrl+c to cancel)").
+		Title("Select an AWS profile").
+		Description("ctrl+c to cancel").
 		Options(opts...).
 		Height(selectHeight(termHeight, len(items))).
-		Filtering(true).
 		Value(&selected)
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithOutput(os.Stderr).
@@ -84,11 +85,10 @@ func Pick(items []Item) (string, error) {
 }
 
 // pickerKeyMap adjusts huh's default keymap for the single-field picker.
-// Enabling Filtering makes huh skip its per-position key setup, so the
-// field-navigation bindings ("next"/"prev") stay enabled even though there is
-// only one field. That is why the footer redundantly shows "enter select"
-// (next) next to "enter submit". Disabling those navigation bindings leaves a
-// single, honest "enter select" hint; Enter still submits via Submit.
+// There is only one field, so the field-to-field navigation bindings
+// ("prev"/"next") are meaningless; disabling them keeps them out of the help
+// footer regardless of huh's per-position setup. Submit's Enter is relabeled
+// "select" to read naturally for a picker; Enter still submits via Submit.
 func pickerKeyMap() *huh.KeyMap {
 	km := huh.NewDefaultKeyMap()
 	km.Select.Prev.SetEnabled(false)

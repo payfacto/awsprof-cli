@@ -15,9 +15,9 @@ func TestSelectHeight(t *testing.T) {
 	}{
 		{"unknown size falls back", 0, 50, 10},
 		{"negative size falls back", -1, 50, 10},
-		{"fallback clamped to item count", 0, 3, 4},
+		{"fallback clamped to item count", 0, 3, 5},
 		{"bounded by terminal height", 20, 50, 15},
-		{"clamped to item count", 50, 5, 6},
+		{"clamped to item count", 50, 5, 7},
 		{"floored at minimum", 6, 50, 4},
 	}
 	for _, tt := range tests {
