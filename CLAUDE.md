@@ -25,9 +25,9 @@ to `bb`**. Ignore any residual Bitbucket concepts.
 interactive picker, `<profile>` positional resolution, `list [--plain]`,
 `whoami`, `shell-init <bash|zsh|fish|powershell>`, and a hidden `use <profile>`
 alias, all wired in `cmd/`. Supporting packages live under `internal/` (see
-"Package layout" below). Tests exist alongside every package. See
-[`.context/HANDOFF.md`](.context/HANDOFF.md) for session history and any
-remaining backlog items.
+"Package layout" below). Tests exist alongside every package. Session history
+and any remaining backlog items live in the out-of-repo handoff file (see the
+`handoff` skill; `/handoff resume` to read it).
 
 ## Commands
 

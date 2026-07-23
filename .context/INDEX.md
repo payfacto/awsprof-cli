@@ -6,9 +6,10 @@ are also auto-imported by `CLAUDE.md`.
 
 ## Root Files
 
-- [HANDOFF.md](HANDOFF.md) - Long-running session log: outstanding backlog,
-  condensed session history, decisions, open questions. Read this first to pick
-  up where the last session left off.
+- Session handoff (outstanding backlog, condensed session history, decisions,
+  open questions) now lives out-of-repo at `~/.claude/handoffs/` (see the
+  `handoff` skill), not in this directory. Use `/handoff resume` to pick up
+  where the last session left off.
 - [@TECHSTACK.md](TECHSTACK.md) - Tech stack reference. Split into the confirmed
   base (Go, Cobra, GoReleaser) and the parts still to be decided in design.
 - [GO-RELEASE-PATTERNS.md](GO-RELEASE-PATTERNS.md) - Release runbook: GoReleaser
