@@ -22,7 +22,7 @@ to `bb`**. Ignore any residual Bitbucket concepts.
 ## Current state
 
 **Code present - the CLI is fully implemented.** Command surface: bare
-interactive picker, `<profile>` positional resolution, `list [--plain]`,
+interactive picker, `<profile>` positional resolution (exact, alias, prefix), `list [--plain]`,
 `whoami`, `shell-init <bash|zsh|fish|powershell>`, and a hidden `use <profile>`
 alias, all wired in `cmd/`. Supporting packages live under `internal/` (see
 "Package layout" below). Tests exist alongside every package. Session history
@@ -65,12 +65,14 @@ parsing, calling into `internal/`, printing output.
   persistent `--shell` flag), `activate.go` (shared resolve -> login-if-needed
   -> verify -> print-export flow used by root and `use`), `list.go`,
   `whoami.go`, `shell_init.go`, `use.go` (hidden alias).
-- **`internal/config`** - loads the optional `~/.awsprof.yaml` (currently just
-  the `prefixes` list used for short-name resolution; default `payfacto-`).
+- **`internal/config`** - loads the optional `~/.awsprof.yaml`: the `prefixes`
+  list used for short-name resolution (default `payfacto-`) and the `aliases`
+  map (shortcut -> profile; per-machine, no built-in defaults).
 - **`internal/profiles`** - discovers and classifies profiles from
   `~/.aws/config` / `~/.aws/credentials` (honoring `AWS_CONFIG_FILE` /
-  `AWS_SHARED_CREDENTIALS_FILE`) via `gopkg.in/ini.v1`; resolves a short name to
-  a profile (exact match, then each configured prefix in order).
+  `AWS_SHARED_CREDENTIALS_FILE`) via `gopkg.in/ini.v1`; resolves a typed name to
+  a profile via `Resolver` (exact match, then alias, then each configured prefix
+  in order) and indexes aliases per profile for `list` (`AliasesByProfile`).
 - **`internal/sso`** - the SSO device-authorization login flow
   (`ssooidc` RegisterClient / StartDeviceAuthorization / CreateToken polling)
   and an aws-CLI-compatible token cache at `~/.aws/sso/cache/<sha1>.json`.
