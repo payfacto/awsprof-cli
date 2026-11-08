@@ -73,8 +73,8 @@ Open a new shell (or re-source the file) and `awsprof` is ready to use.
 
 ```bash
 awsprof                                        # interactive picker, then login if needed, then activate
-awsprof <profile>                              # resolve profile (exact name, then configured prefix), login if needed, activate
-awsprof list [--plain]                         # list profiles; marks the active one; --plain prints bare names
+awsprof <profile>                              # resolve profile (exact name, alias, then configured prefix), login if needed, activate
+awsprof list [--plain]                         # list profiles with their aliases; marks the active one; --plain prints bare names
 awsprof whoami                                 # show current identity (AWS_PROFILE, account, ARN); does not switch
 awsprof shell-init <bash|zsh|fish|powershell>  # print the shell hook (see Setup above)
 awsprof use <profile>                          # hidden alias of `awsprof <profile>`
@@ -110,10 +110,31 @@ Profiles are discovered from the standard AWS locations:
 its own config. For SSO profiles, browser-based device login only runs when
 the cached SSO token is stale; a valid cached token is reused.
 
-`awsprof <name>` resolves `name` to a profile by trying an exact match first,
-then each prefix in the `prefixes` list from `~/.awsprof.yaml` (default:
-`payfacto-`), so `awsprof dev` can match a profile literally named `dev`, or
-(if no exact match exists) `payfacto-dev`.
+`awsprof <name>` resolves `name` to a profile by trying, in order:
+
+1. an exact profile name,
+2. an alias from the `aliases` map in `~/.awsprof.yaml`,
+3. each prefix in the `prefixes` list from `~/.awsprof.yaml` (default:
+   `payfacto-`), so `awsprof dev` can match `payfacto-dev`.
+
+Aliases are per-machine shortcuts; awsprof ships none. An alias target can be a
+full profile name or a short name that resolves through `prefixes`:
+
+```yaml
+# ~/.awsprof.yaml
+prefixes:
+  - payfacto-
+aliases:
+  sa: synapse-admin                 # awsprof sa -> payfacto-synapse-admin
+  tpr: payfacto-titan-prod-readonly # full names work too
+```
+
+A real profile with the same name as an alias wins over the alias, and an
+alias target is never looked up as another alias (aliases do not chain). An alias
+whose target matches no profile fails with
+`alias "<name>" points to unknown profile "<target>"`, and `awsprof list`
+prints a warning for it on stderr. `awsprof list` shows each profile's aliases
+in a trailing column (`--plain` output is unchanged: bare names only).
 
 ### Environment coloring
 

@@ -46,12 +46,18 @@ Profiles come from the standard AWS locations:
 `awsprof` reads these files. It does not write long-lived credentials into a
 config of its own.
 
+Optional `~/.awsprof.yaml`: `prefixes` (list, default `[payfacto-]`) and
+`aliases` (map shortcut -> profile name or prefix-resolvable short name; no
+built-in aliases). Resolution order: exact profile name, alias, prefixes. An
+alias with no matching profile errors (`alias "x" points to unknown profile
+"y"`); `list` warns about it on stderr.
+
 ## Commands
 
 ```
 awsprof                                         # interactive picker -> login if needed -> activate
-awsprof <profile>                               # resolve (exact, then configured prefix) -> login if needed -> activate
-awsprof list [--plain]                          # list profiles; marks the active one; --plain = bare names
+awsprof <profile>                               # resolve (exact, then alias, then configured prefix) -> login if needed -> activate
+awsprof list [--plain]                          # list profiles + alias column; marks the active one; --plain = bare names
 awsprof whoami                                  # print current identity (AWS_PROFILE, Account, ARN); no switch
 awsprof shell-init <bash|zsh|fish|powershell>   # emit the shell hook (see Required setup above)
 awsprof use <profile>                           # hidden alias of `awsprof <profile>`

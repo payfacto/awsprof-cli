@@ -20,22 +20,19 @@ import (
 )
 
 // resolveTarget maps a typed name to an existing profile using configured
-// prefixes. On an unknown name it prints the available profiles to stderr
-// before returning the error, so callers never need to duplicate that step.
+// aliases and prefixes. On an unknown name it prints the available profiles to
+// stderr before returning the error, so callers never need to duplicate that
+// step.
 func resolveTarget(name string) (profiles.Profile, error) {
 	ps, err := profiles.List()
 	if err != nil {
 		return profiles.Profile{}, err
 	}
-	cfg, err := config.Load(config.DefaultPath())
+	resolver, err := loadResolver()
 	if err != nil {
 		return profiles.Profile{}, err
 	}
-	names := make([]string, len(ps))
-	for i, p := range ps {
-		names[i] = p.Name
-	}
-	resolved, err := profiles.Resolve(name, cfg.Prefixes, names)
+	resolved, err := profiles.Resolve(name, resolver, profileNames(ps))
 	if err != nil {
 		printProfiles(ps)
 		return profiles.Profile{}, err
@@ -46,6 +43,23 @@ func resolveTarget(name string) (profiles.Profile, error) {
 		}
 	}
 	return profiles.Profile{}, fmt.Errorf("unknown profile %q", name)
+}
+
+// loadResolver builds the name resolver from the user's ~/.awsprof.yaml.
+func loadResolver() (profiles.Resolver, error) {
+	cfg, err := config.Load(config.DefaultPath())
+	if err != nil {
+		return profiles.Resolver{}, err
+	}
+	return profiles.Resolver{Prefixes: cfg.Prefixes, Aliases: cfg.Aliases}, nil
+}
+
+func profileNames(ps []profiles.Profile) []string {
+	names := make([]string, len(ps))
+	for i, p := range ps {
+		names[i] = p.Name
+	}
+	return names
 }
 
 // regionHint annotates err with a hint when prof is an SSO profile that has no

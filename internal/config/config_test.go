@@ -44,3 +44,22 @@ func TestLoad_EmptyFileReturnsDefaults(t *testing.T) {
 		t.Fatalf("got %v", cfg.Prefixes)
 	}
 }
+
+func TestLoad_ReadsAliases(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "awsprof.yaml")
+	body := "aliases:\n  sa: payfacto-synapse-admin\n  sp: synapse-poweruser\n"
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]string{"sa": "payfacto-synapse-admin", "sp": "synapse-poweruser"}
+	if !reflect.DeepEqual(cfg.Aliases, want) {
+		t.Fatalf("got %v, want %v", cfg.Aliases, want)
+	}
+	if !reflect.DeepEqual(cfg.Prefixes, []string{"payfacto-"}) {
+		t.Fatalf("aliases-only file must keep default prefixes, got %v", cfg.Prefixes)
+	}
+}

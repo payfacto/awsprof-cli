@@ -14,6 +14,9 @@ import (
 type Config struct {
 	// Prefixes are tried in order when resolving a short profile name.
 	Prefixes []string `yaml:"prefixes"`
+	// Aliases maps a shortcut to a profile name. The target may be a full
+	// profile name or a short name resolved through Prefixes.
+	Aliases map[string]string `yaml:"aliases"`
 }
 
 func defaults() Config {
