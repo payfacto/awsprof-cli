@@ -31,6 +31,11 @@ are also auto-imported by `CLAUDE.md`.
   `list`, the picker, and `whoami`. Hardcoded env->color map (prod=bold red,
   staging=orange, uat=purple, qa=yellow, dev=green, sandbox=blue) via lipgloss;
   respects NO_COLOR / non-TTY / `--plain`. Approved 2026-07-11.
+- [specs/2026-10-27-browserless-sso-login-spike.md](specs/2026-10-27-browserless-sso-login-spike.md) -
+  Spike (not merged): scripted Identity Center login via a hidden webview, password
+  from macOS Keychain, TOTP at the CLI. Feasible on macOS; use glaze directly
+  (webframe's `Eval` is blocked by the AWS CSP). Reached the MFA screen; MFA submit
+  and consent screen untested. Includes step-4 plan and risks.
 
 ### `plans/`
 
